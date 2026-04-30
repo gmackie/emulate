@@ -192,12 +192,33 @@ export async function startCommand(options: StartOptions): Promise<void> {
     httpServers.push(httpServer);
   }
 
-  printBanner(serviceUrls, tokens, configSource);
+  const wireProtocolPorts: Record<string, number> = {};
+  for (const p of prepared) {
+    if (p.svc === "postgres" || p.svc === "redis") {
+      const configPort = p.svcSeedConfig?.port as number | undefined;
+      wireProtocolPorts[p.svc] = configPort ?? (p.svc === "postgres" ? 5432 : 6379);
+    }
+  }
 
-  const shutdown = () => {
+  printBanner(serviceUrls, tokens, configSource, wireProtocolPorts);
+
+  const shutdown = async () => {
     console.log(`\n${pc.dim("Shutting down...")}`);
     if (portlessAliases.length > 0) {
       removeAliases(portlessAliases);
+    }
+    for (const p of prepared) {
+      if (p.svc === "postgres") {
+        try {
+          const { stopPostgresServer } = await import("@emulators/postgres");
+          await stopPostgresServer();
+        } catch { /* ignore */ }
+      } else if (p.svc === "redis") {
+        try {
+          const { stopRedisServer } = await import("@emulators/redis");
+          await stopRedisServer();
+        } catch { /* ignore */ }
+      }
     }
     for (const store of stores) {
       store.reset();
@@ -207,14 +228,15 @@ export async function startCommand(options: StartOptions): Promise<void> {
     }
     process.exit(0);
   };
-  process.once("SIGINT", shutdown);
-  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", () => { shutdown(); });
+  process.once("SIGTERM", () => { shutdown(); });
 }
 
 function printBanner(
   services: Array<{ name: string; url: string }>,
   tokens: Record<string, { login: string; id: number; scopes?: string[] }>,
   configSource: string | null,
+  wireProtocolPorts?: Record<string, number>,
 ): void {
   const lines: string[] = [];
   lines.push("");
@@ -223,7 +245,9 @@ function printBanner(
 
   const maxNameLen = Math.max(...services.map((s) => s.name.length));
   for (const { name, url } of services) {
-    lines.push(`  ${pc.cyan(name.padEnd(maxNameLen + 2))}${pc.bold(url)}`);
+    const wirePort = wireProtocolPorts?.[name];
+    const suffix = wirePort ? `  ${pc.dim(`(wire: localhost:${wirePort})`)}` : "";
+    lines.push(`  ${pc.cyan(name.padEnd(maxNameLen + 2))}${pc.bold(url)}${suffix}`);
   }
   lines.push("");
 

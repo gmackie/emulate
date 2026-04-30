@@ -71,6 +71,8 @@
     "@emulators/resend": "workspace:*",
     "@emulators/stripe": "workspace:*",
     "@emulators/clerk": "workspace:*",
+    "@emulators/postgres": "workspace:*",
+    "@emulators/redis": "workspace:*",
     "tsup": "^8",
     "typescript": "^5.7"
   }

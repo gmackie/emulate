@@ -27,6 +27,8 @@ const SERVICE_NAME_LIST = [
   "stripe",
   "mongoatlas",
   "clerk",
+  "postgres",
+  "redis",
 ] as const;
 export type ServiceName = (typeof SERVICE_NAME_LIST)[number];
 export const SERVICE_NAMES: readonly ServiceName[] = SERVICE_NAME_LIST;
@@ -447,6 +449,41 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
             redirect_uris: ["http://localhost:3000/api/auth/callback/clerk"],
           },
         ],
+      },
+    },
+  },
+
+  postgres: {
+    label: "PostgreSQL database emulator (PGlite/WASM)",
+    endpoints: "wire protocol (TCP), admin status, reset, database list",
+    async load() {
+      const mod = await import("@emulators/postgres");
+      return { plugin: mod.postgresPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback() {
+      return { login: "postgres", id: 1, scopes: [] };
+    },
+    initConfig: {
+      postgres: {
+        port: 5432,
+        databases: [{ name: "app_dev" }],
+      },
+    },
+  },
+
+  redis: {
+    label: "Redis cache emulator (redis-memory-server)",
+    endpoints: "wire protocol (TCP), admin status, reset, flush",
+    async load() {
+      const mod = await import("@emulators/redis");
+      return { plugin: mod.redisPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback() {
+      return { login: "default", id: 1, scopes: [] };
+    },
+    initConfig: {
+      redis: {
+        port: 6379,
       },
     },
   },
