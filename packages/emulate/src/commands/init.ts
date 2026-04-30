@@ -5,6 +5,7 @@ import { SERVICE_REGISTRY, SERVICE_NAMES, DEFAULT_TOKENS, type ServiceName } fro
 
 interface InitOptions {
   service: string;
+  slug?: string;
 }
 
 export function initCommand(options: InitOptions): void {
@@ -29,6 +30,10 @@ export function initCommand(options: InitOptions): void {
       process.exit(1);
     }
     config = { ...DEFAULT_TOKENS, ...entry.initConfig };
+  }
+
+  if (options.slug) {
+    config = { slug: options.slug, ...config };
   }
 
   const content = yamlStringify(config);

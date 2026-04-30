@@ -17,9 +17,11 @@ export interface StartOptions {
   seed?: string;
   baseUrl?: string;
   portless?: boolean;
+  slug?: string;
 }
 
 interface SeedConfig {
+  slug?: string;
   tokens?: Record<string, { login: string; scopes?: string[] }>;
   [service: string]: unknown;
 }
@@ -89,6 +91,13 @@ export async function startCommand(options: StartOptions): Promise<void> {
   const seedConfig = loaded?.config ?? null;
   const configSource = loaded?.source ?? null;
 
+  const slug = options.slug ?? seedConfig?.slug;
+
+  if (slug && !options.portless) {
+    console.error("--slug requires --portless.");
+    process.exit(1);
+  }
+
   let services: ServiceName[];
   if (options.service) {
     services = options.service.split(",").map((s) => s.trim()) as ServiceName[];
@@ -140,14 +149,15 @@ export async function startCommand(options: StartOptions): Promise<void> {
     const port = (svcSeedConfig?.port as number | undefined) ?? basePort + i;
 
     if (options.portless) {
-      portlessAliases.push({ name: `${svc}.emulate`, port });
+      const aliasName = slug ? `${svc}.${slug}.emulate` : `${svc}.emulate`;
+      portlessAliases.push({ name: aliasName, port });
     }
 
     const seedBaseUrl =
       typeof svcSeedConfig?.baseUrl === "string" && svcSeedConfig.baseUrl.length > 0
         ? svcSeedConfig.baseUrl
         : undefined;
-    const effectiveBaseUrl = options.portless ? portlessBaseUrl(svc) : options.baseUrl;
+    const effectiveBaseUrl = options.portless ? portlessBaseUrl(svc, slug) : options.baseUrl;
     const baseUrl = resolveBaseUrl({ service: svc, port, baseUrl: effectiveBaseUrl, seedBaseUrl });
 
     prepared.push({ svc, entry, loadedSvc, svcSeedConfig, port, baseUrl });

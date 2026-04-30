@@ -1,6 +1,7 @@
 import { defineConfig } from "tsup";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { cpSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { createRequire } from "node:module";
 
 const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf-8"));
 
@@ -9,6 +10,15 @@ const copyFonts = async () => {
   const dest = resolve(__dirname, "dist/fonts");
   mkdirSync(dest, { recursive: true });
   cpSync(src, dest, { recursive: true });
+};
+
+const copyPgliteAssets = async () => {
+  const req = createRequire(resolve(__dirname, "../@emulators/postgres/package.json"));
+  const pgliteDist = dirname(req.resolve("@electric-sql/pglite"));
+  const dest = resolve(__dirname, "dist");
+  for (const file of ["pglite.data", "pglite.wasm", "initdb.wasm"]) {
+    copyFileSync(resolve(pgliteDist, file), resolve(dest, file));
+  }
 };
 
 const addShebang = async () => {
@@ -33,8 +43,10 @@ export default defineConfig([
     splitting: true,
     sourcemap: true,
     noExternal: [/^@emulators\//],
+    external: ["redis-memory-server"],
     async onSuccess() {
       await copyFonts();
+      await copyPgliteAssets();
       await addShebang();
     },
   },
@@ -47,6 +59,10 @@ export default defineConfig([
     splitting: true,
     sourcemap: true,
     noExternal: [/^@emulators\//],
-    onSuccess: copyFonts,
+    external: ["redis-memory-server"],
+    async onSuccess() {
+      await copyFonts();
+      await copyPgliteAssets();
+    },
   },
 ]);
