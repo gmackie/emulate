@@ -6,6 +6,7 @@ import { resolve } from "path";
 import { parse as parseYaml } from "yaml";
 import pc from "picocolors";
 import { ensurePortless, registerAliases, removeAliases, portlessBaseUrl, type PortlessAlias } from "../portless.js";
+import { resolveHttpPort } from "./ports.js";
 import { resolveBaseUrl } from "../base-url.js";
 
 declare const PKG_VERSION: string;
@@ -79,6 +80,7 @@ function inferServicesFromConfig(config: SeedConfig): ServiceName[] | null {
   return found.length > 0 ? [...found] : null;
 }
 
+
 export async function startCommand(options: StartOptions): Promise<void> {
   const { port: basePort } = options;
 
@@ -146,21 +148,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
     const loadedSvc = await entry.load();
 
     const svcSeedConfig = seedConfig?.[svc] as Record<string, unknown> | undefined;
-    // postgres/redis use `port` in their seed config to mean the WIRE
-    // PROTOCOL port -- a separate raw socket server they start themselves
-    // inside seedFromConfig (PGLiteSocketServer / a redis server) -- NOT the
-    // port for this generic Hono HTTP admin/inspector app below. Reusing the
-    // same value for both made them race for the same port: this
-    // synchronous serve() call always won, and the wire protocol server's
-    // later async bind failed with EADDRINUSE (silently swallowed by its own
-    // error handling), so the CLI reported success while the wire protocol
-    // was actually unreachable -- its TCP port instead served this HTTP
-    // inspector/admin app, which is why a raw postgres client connecting to
-    // "localhost:5432" got an HTTP response instead of the wire protocol.
-    const hasSeparateWireProtocol = svc === "postgres" || svc === "redis";
-    const port = hasSeparateWireProtocol
-      ? basePort + i
-      : ((svcSeedConfig?.port as number | undefined) ?? basePort + i);
+    const port = resolveHttpPort(svc, svcSeedConfig, basePort, i);
 
     if (options.portless) {
       const aliasName = slug ? `${svc}.${slug}.emulate` : `${svc}.emulate`;
