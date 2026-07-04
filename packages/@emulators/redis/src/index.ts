@@ -16,7 +16,6 @@ export interface RedisSeedConfig {
   };
 }
 
-
 export function seedFromConfig(store: Store, _baseUrl: string, config: RedisSeedConfig): void {
   const rs = getRedisStore(store);
   const port = config.port ?? 6379;
@@ -24,17 +23,19 @@ export function seedFromConfig(store: Store, _baseUrl: string, config: RedisSeed
   startRedisServer({
     port,
     binary: config.binary,
-  }).then((handle) => {
-    rs.instances.insert({
-      port: handle.port,
-      host: handle.host,
-      running: true,
-    });
+  })
+    .then((handle) => {
+      rs.instances.insert({
+        port: handle.port,
+        host: handle.host,
+        running: true,
+      });
 
-    console.log(`  redis wire protocol listening on ${handle.host}:${handle.port}`);
-  }).catch((err) => {
-    console.error("[redis] Failed to start Redis server:", err);
-  });
+      console.log(`  redis wire protocol listening on ${handle.host}:${handle.port}`);
+    })
+    .catch((err) => {
+      console.error("[redis] Failed to start Redis server:", err);
+    });
 }
 
 export const redisPlugin: ServicePlugin = {

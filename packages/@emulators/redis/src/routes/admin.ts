@@ -25,10 +25,7 @@ export function adminRoutes(ctx: RouteContext): void {
       return c.json({ error: "Redis is not running" }, 503);
     }
 
-    return c.json(
-      { error: "Not implemented. Use a Redis client: redis-cli FLUSHALL" },
-      501,
-    );
+    return c.json({ error: "Not implemented. Use a Redis client: redis-cli FLUSHALL" }, 501);
   });
 
   app.post("/flush", async (c) => {
@@ -37,9 +34,6 @@ export function adminRoutes(ctx: RouteContext): void {
       return c.json({ error: "Redis is not running" }, 503);
     }
 
-    return c.json(
-      { error: "Not implemented. Use a Redis client: redis-cli FLUSHALL" },
-      501,
-    );
+    return c.json({ error: "Not implemented. Use a Redis client: redis-cli FLUSHALL" }, 501);
   });
 }

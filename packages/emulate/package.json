@@ -1,6 +1,6 @@
 {
   "name": "@gmacko/emulate",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Local drop-in replacement services for CI and no-network sandboxes",
   "license": "Apache-2.0",
   "type": "module",

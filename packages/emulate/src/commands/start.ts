@@ -80,7 +80,6 @@ function inferServicesFromConfig(config: SeedConfig): ServiceName[] | null {
   return found.length > 0 ? [...found] : null;
 }
 
-
 export async function startCommand(options: StartOptions): Promise<void> {
   const { port: basePort } = options;
 
@@ -224,12 +223,16 @@ export async function startCommand(options: StartOptions): Promise<void> {
         try {
           const { stopPostgresServer } = await import("@emulators/postgres");
           await stopPostgresServer();
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       } else if (p.svc === "redis") {
         try {
           const { stopRedisServer } = await import("@emulators/redis");
           await stopRedisServer();
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     }
     for (const store of stores) {
@@ -240,8 +243,12 @@ export async function startCommand(options: StartOptions): Promise<void> {
     }
     process.exit(0);
   };
-  process.once("SIGINT", () => { shutdown(); });
-  process.once("SIGTERM", () => { shutdown(); });
+  process.once("SIGINT", () => {
+    shutdown();
+  });
+  process.once("SIGTERM", () => {
+    shutdown();
+  });
 }
 
 function printBanner(

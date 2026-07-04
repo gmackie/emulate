@@ -5,5 +5,3 @@ export interface RedisInstance extends Entity {
   host: string;
   running: boolean;
 }
-
-

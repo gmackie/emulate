@@ -4,5 +4,3 @@ export interface PostgresDatabase extends Entity {
   name: string;
   extensions: string[];
 }
-
-

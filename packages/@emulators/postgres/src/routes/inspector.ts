@@ -1,9 +1,5 @@
 import type { RouteContext } from "@emulators/core";
-import {
-  renderInspectorPage,
-  escapeHtml,
-  type InspectorTab,
-} from "@emulators/core";
+import { renderInspectorPage, escapeHtml, type InspectorTab } from "@emulators/core";
 import { getPostgresStore } from "../store.js";
 import { getPgliteInstance } from "../server.js";
 
@@ -42,9 +38,7 @@ export function inspectorRoutes(ctx: RouteContext): void {
 
     if (pglite) {
       try {
-        const result = await pglite.exec(
-          "SELECT count(*) as count FROM pg_tables WHERE schemaname = 'public'",
-        );
+        const result = await pglite.exec("SELECT count(*) as count FROM pg_tables WHERE schemaname = 'public'");
         const tableCount = result[0]?.rows?.[0]?.count ?? 0;
         statsRows.push(["Tables (public)", String(tableCount)]);
       } catch {
@@ -66,8 +60,7 @@ export function inspectorRoutes(ctx: RouteContext): void {
 
     const tableHtml = statsRows
       .map(
-        ([key, value]) =>
-          `<tr><td style="font-weight:600">${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`,
+        ([key, value]) => `<tr><td style="font-weight:600">${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`,
       )
       .join("");
 
@@ -102,20 +95,15 @@ export function inspectorRoutes(ctx: RouteContext): void {
   </form>
 </div>`;
 
-    return c.html(
-      renderInspectorPage("PostgreSQL Admin", TABS, "overview", body, SERVICE_LABEL),
-    );
+    return c.html(renderInspectorPage("PostgreSQL Admin", TABS, "overview", body, SERVICE_LABEL));
   });
 
   app.get("/tables", async (c) => {
     const pglite = getPgliteInstance();
 
     if (!pglite) {
-      const body =
-        '<div class="inspector-section"><p class="empty">PostgreSQL is not running</p></div>';
-      return c.html(
-        renderInspectorPage("Tables", TABS, "tables", body, SERVICE_LABEL),
-      );
+      const body = '<div class="inspector-section"><p class="empty">PostgreSQL is not running</p></div>';
+      return c.html(renderInspectorPage("Tables", TABS, "tables", body, SERVICE_LABEL));
     }
 
     let body = "";
@@ -144,9 +132,7 @@ export function inspectorRoutes(ctx: RouteContext): void {
           );
           const columns = colResult.rows ?? [];
 
-          const countResult = await pglite.query(
-            `SELECT count(*)::int as count FROM ${quoteIdent(table.tablename)}`,
-          );
+          const countResult = await pglite.query(`SELECT count(*)::int as count FROM ${quoteIdent(table.tablename)}`);
           const rowCount = (countResult.rows?.[0] as any)?.count ?? 0;
 
           const columnRows = (
@@ -183,9 +169,7 @@ export function inspectorRoutes(ctx: RouteContext): void {
       body = `<div class="inspector-section"><p class="empty">Error reading tables: ${escapeHtml(String(err))}</p></div>`;
     }
 
-    return c.html(
-      renderInspectorPage("Tables", TABS, "tables", body, SERVICE_LABEL),
-    );
+    return c.html(renderInspectorPage("Tables", TABS, "tables", body, SERVICE_LABEL));
   });
 
   app.get("/query", (c) => {
@@ -205,20 +189,15 @@ export function inspectorRoutes(ctx: RouteContext): void {
   </div>
 </div>`;
 
-    return c.html(
-      renderInspectorPage("Query", TABS, "query", body, SERVICE_LABEL),
-    );
+    return c.html(renderInspectorPage("Query", TABS, "query", body, SERVICE_LABEL));
   });
 
   app.post("/query", async (c) => {
     const pglite = getPgliteInstance();
 
     if (!pglite) {
-      const body =
-        '<div class="inspector-section"><p class="empty">PostgreSQL is not running</p></div>';
-      return c.html(
-        renderInspectorPage("Query", TABS, "query", body, SERVICE_LABEL),
-      );
+      const body = '<div class="inspector-section"><p class="empty">PostgreSQL is not running</p></div>';
+      return c.html(renderInspectorPage("Query", TABS, "query", body, SERVICE_LABEL));
     }
 
     const formData = await c.req.parseBody();
@@ -285,8 +264,6 @@ export function inspectorRoutes(ctx: RouteContext): void {
 </div>
 ${resultHtml}`;
 
-    return c.html(
-      renderInspectorPage("Query", TABS, "query", body, SERVICE_LABEL),
-    );
+    return c.html(renderInspectorPage("Query", TABS, "query", body, SERVICE_LABEL));
   });
 }

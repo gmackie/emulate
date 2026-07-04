@@ -18,7 +18,6 @@ export interface PostgresSeedConfig {
   }>;
 }
 
-
 function seedDefaults(store: Store, _baseUrl: string): void {
   const ps = getPostgresStore(store);
   ps.databases.insert({
@@ -50,11 +49,13 @@ export function seedFromConfig(store: Store, _baseUrl: string, config: PostgresS
     port,
     dataDir,
     databases: config.databases,
-  }).then(() => {
-    console.log(`  postgres wire protocol listening on localhost:${port}`);
-  }).catch((err) => {
-    console.error("[postgres] Failed to start PGlite server:", err);
-  });
+  })
+    .then(() => {
+      console.log(`  postgres wire protocol listening on localhost:${port}`);
+    })
+    .catch((err) => {
+      console.error("[postgres] Failed to start PGlite server:", err);
+    });
 }
 
 export const postgresPlugin: ServicePlugin = {

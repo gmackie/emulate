@@ -1,9 +1,5 @@
 import type { RouteContext } from "@emulators/core";
-import {
-  renderInspectorPage,
-  escapeHtml,
-  type InspectorTab,
-} from "@emulators/core";
+import { renderInspectorPage, escapeHtml, type InspectorTab } from "@emulators/core";
 import { getRedisStore } from "../store.js";
 import { getRedisServer } from "../server.js";
 
@@ -41,8 +37,7 @@ export function inspectorRoutes(ctx: RouteContext): void {
 
     const tableHtml = statsRows
       .map(
-        ([key, value]) =>
-          `<tr><td style="font-weight:600">${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`,
+        ([key, value]) => `<tr><td style="font-weight:600">${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`,
       )
       .join("");
 
@@ -77,20 +72,15 @@ export function inspectorRoutes(ctx: RouteContext): void {
   </div>
 </div>`;
 
-    return c.html(
-      renderInspectorPage("Redis Admin", TABS, "overview", body, SERVICE_LABEL),
-    );
+    return c.html(renderInspectorPage("Redis Admin", TABS, "overview", body, SERVICE_LABEL));
   });
 
   app.get("/keys", (c) => {
     const server = getRedisServer();
 
     if (!server) {
-      const body =
-        '<div class="inspector-section"><p class="empty">Redis is not running</p></div>';
-      return c.html(
-        renderInspectorPage("Keys", TABS, "keys", body, SERVICE_LABEL),
-      );
+      const body = '<div class="inspector-section"><p class="empty">Redis is not running</p></div>';
+      return c.html(renderInspectorPage("Keys", TABS, "keys", body, SERVICE_LABEL));
     }
 
     const pattern = c.req.query("pattern") ?? "*";
@@ -124,8 +114,6 @@ export function inspectorRoutes(ctx: RouteContext): void {
   </div>
 </div>`;
 
-    return c.html(
-      renderInspectorPage("Keys", TABS, "keys", body, SERVICE_LABEL),
-    );
+    return c.html(renderInspectorPage("Keys", TABS, "keys", body, SERVICE_LABEL));
   });
 }
