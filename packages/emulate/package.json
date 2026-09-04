@@ -55,7 +55,6 @@
     "commander": "^14",
     "miniflare": "4.20260730.0",
     "picocolors": "^1.1.1",
-    "redis-memory-server": "^0.10.0",
     "yaml": "^2"
   },
   "devDependencies": {
@@ -79,5 +78,8 @@
     "@emulators/redis": "workspace:*",
     "tsup": "^8",
     "typescript": "^5.7"
+  },
+  "optionalDependencies": {
+    "redis-memory-server": "^0.10.0"
   }
 }

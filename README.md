@@ -1102,6 +1102,31 @@ On the HTTP port: `GET /status` and an inspector at `/` with a `/keys` tab. `POS
 
 D1 and R2 emulation backed by Miniflare, which runs workerd's SQLite. That is the same engine production D1 runs on, so SQL behaves the way it behaves in production, quirks included. They share one service because they share one account namespace, one response envelope, one Miniflare instance, and one `CLOUDFLARE_API_BASE_URL`.
 
+### Seeding databases and buckets
+
+Declare what should exist at startup in `emulate.config.yaml`. Databases and
+buckets nest under the service's own `d1` and `r2` keys, not directly under
+`cloudflare:`.
+
+```yaml
+cloudflare:
+  port: 4016
+  # Omit persist_dir to keep everything in memory and start clean each run.
+  persist_dir: .emulate/cloudflare
+  d1:
+    databases:
+      - name: my-app
+  r2:
+    buckets:
+      - name: my-uploads
+        # Optional; generated when omitted.
+        s3_access_key_id: local-key
+        s3_secret_access_key: local-secret
+```
+
+Seeding is a convenience, not a requirement. Anything you leave out can still be
+created at runtime with `wrangler d1 create` or `wrangler r2 bucket create`.
+
 ### Pointing wrangler at the emulator
 
 One environment variable redirects every `wrangler d1` and `wrangler r2` call. No proxy, no hosts file.

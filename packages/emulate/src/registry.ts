@@ -684,8 +684,26 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
     label: "Redis cache emulator (redis-memory-server)",
     endpoints: "wire protocol (TCP), admin status, reset, flush",
     async load() {
-      const mod = await import("@emulators/redis");
-      return { plugin: mod.redisPlugin, seedFromConfig: mod.seedFromConfig };
+      // `redis-memory-server` is an OPTIONAL dependency: it compiles Redis from
+      // source on install and needs GNU Make 4+, which macOS does not ship, so a
+      // hard dependency fails `npm install` for everyone including the many users
+      // who never touch Redis. It is reached only from here and from the shutdown
+      // path in `commands/start.ts`, both behind this dynamic import, so every
+      // other emulator keeps working when it is absent.
+      try {
+        const mod = await import("@emulators/redis");
+        return { plugin: mod.redisPlugin, seedFromConfig: mod.seedFromConfig };
+      } catch (error) {
+        const code = (error as { code?: string } | null)?.code;
+        if (code !== "ERR_MODULE_NOT_FOUND" && code !== "MODULE_NOT_FOUND") throw error;
+        throw new Error(
+          "The redis emulator needs the optional package `redis-memory-server`, which is not installed.\n"
+            + "It builds Redis from source and needs GNU Make 4+; macOS ships 3.81, so its build is skipped or fails.\n"
+            + "Fix: `brew install make` then reinstall, or install with pnpm and run `pnpm approve-builds`.\n"
+            + "Every other service runs without it.",
+          { cause: error },
+        );
+      }
     },
     defaultFallback() {
       return { login: "default", id: 1, scopes: [] };
