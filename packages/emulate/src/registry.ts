@@ -42,6 +42,7 @@ const SERVICE_NAME_LIST = [
   "twilio",
   "postgres",
   "redis",
+  "cloudflare",
 ] as const;
 export type ServiceName = (typeof SERVICE_NAME_LIST)[number];
 export const SERVICE_NAMES: readonly ServiceName[] = SERVICE_NAME_LIST;
@@ -645,6 +646,35 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
         ],
         conversations: {
           services: [{ friendly_name: "Local Conversations" }],
+        },
+      },
+    },
+  },
+
+  cloudflare: {
+    label: "Cloudflare D1 + R2 emulator (workerd/Miniflare-backed)",
+    endpoints:
+      "D1 REST (create, list, info, query, raw), R2 REST (buckets, objects), S3-compatible object API, fault injection and outcome oracle",
+    async load() {
+      const mod = await import("@emulators/cloudflare");
+      return {
+        plugin: mod.cloudflarePlugin,
+        seedFromConfig: mod.seedFromConfig,
+        prepareSeed: mod.prepareSeed,
+      };
+    },
+    defaultFallback() {
+      return { login: "cloudflare", id: 1, scopes: [] };
+    },
+    initConfig: {
+      cloudflare: {
+        account_id: "0000000000000000000000000000000000",
+        api_token: "dev-cloudflare-token",
+        d1: {
+          databases: [{ name: "app_dev", id: "11111111-1111-4111-8111-111111111111" }],
+        },
+        r2: {
+          buckets: [{ name: "app-uploads" }],
         },
       },
     },

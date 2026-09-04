@@ -239,7 +239,13 @@ function wireProtocolPortsFor(prepared: PreparedService[]): Record<string, numbe
   return ports;
 }
 
-async function stopWireProtocolServers(prepared: PreparedService[]): Promise<void> {
+// Services that own a child process or raw socket outliving the Hono
+// listener: postgres and redis bind their own TCP ports, and cloudflare runs a
+// workerd child process for D1 and R2. Without an explicit stop they leak past
+// Ctrl-C.
+const BACKGROUND_SERVICES: ReadonlySet<ServiceName> = new Set(["postgres", "redis", "cloudflare"]);
+
+async function stopBackgroundServices(prepared: PreparedService[]): Promise<void> {
   for (const preparedService of prepared) {
     if (preparedService.svc === "postgres") {
       try {
@@ -255,6 +261,13 @@ async function stopWireProtocolServers(prepared: PreparedService[]): Promise<voi
       } catch (error) {
         reportCleanupError("redis wire server", error);
       }
+    } else if (preparedService.svc === "cloudflare") {
+      try {
+        const { stopCloudflareEngine } = await import("@emulators/cloudflare");
+        await stopCloudflareEngine();
+      } catch (error) {
+        reportCleanupError("cloudflare workerd engine", error);
+      }
     }
   }
 }
@@ -266,7 +279,7 @@ async function rollbackStartup(
   generatedSecretsFile: PublishedGeneratedSecretsFile,
   prepared: PreparedService[] = [],
 ): Promise<void> {
-  await stopWireProtocolServers(prepared);
+  await stopBackgroundServices(prepared);
   for (const server of [...httpServers].reverse()) {
     try {
       await closeServer(server);
@@ -312,15 +325,16 @@ function installShutdown(
     for (const server of httpServers) {
       server.close();
     }
-    // Wire-protocol emulators own raw TCP sockets that outlive the Hono
-    // listeners, so they need an async stop. Everything else shuts down
-    // synchronously, and stays synchronous when no such service is running.
-    const wireServices = prepared.filter((preparedService) => preparedService.svc in WIRE_PROTOCOL_DEFAULT_PORTS);
-    if (wireServices.length === 0) {
+    // Background emulators own raw TCP sockets or a child process that
+    // outlive the Hono listeners, so they need an async stop. Everything else
+    // shuts down synchronously, and stays synchronous when no such service is
+    // running.
+    const backgroundServices = prepared.filter((preparedService) => BACKGROUND_SERVICES.has(preparedService.svc));
+    if (backgroundServices.length === 0) {
       process.exit(0);
       return;
     }
-    void stopWireProtocolServers(wireServices).finally(() => {
+    void stopBackgroundServices(backgroundServices).finally(() => {
       process.exit(0);
     });
   };

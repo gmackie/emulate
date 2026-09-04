@@ -128,3 +128,23 @@ google:
       mime_type: application/vnd.google-apps.folder
       parent_ids:
         - root
+
+cloudflare:
+  # D1 and R2 are backed by one Miniflare (workerd) instance, so SQL behaves the
+  # way production D1 behaves, including the quirks. Point wrangler here with
+  # CLOUDFLARE_API_BASE_URL=http://localhost:<port>/client/v4
+  account_id: "0000000000000000000000000000000000"
+  api_token: dev-cloudflare-token
+  # Omit persist_dir to keep everything in memory for the life of the process.
+  # persist_dir: .emulate/cloudflare
+  d1:
+    databases:
+      - name: app_dev
+        id: 11111111-1111-4111-8111-111111111111
+  r2:
+    buckets:
+      # S3 credentials are generated when omitted and written to
+      # --generated-secrets-file. S3 clients point at
+      # http://localhost:<port>/cdn-cgi/local/r2/s3 with forcePathStyle: true
+      - name: app-uploads
+

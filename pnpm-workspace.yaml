@@ -10,6 +10,11 @@ allowBuilds:
   "redis-memory-server@0.10.0": false
   "sharp@0.34.5": false
   "unrs-resolver@1.11.1": false
+  # miniflare's workerd runtime: its postinstall resolves the platform-specific
+  # binary (@cloudflare/workerd-<os>-<arch>) that @emulators/cloudflare runs D1
+  # and R2 on, so this build must be allowed.
+  "workerd@1.20260730.1": true
+  workerd: set this to true or false
 
 packages:
   - "packages/*"

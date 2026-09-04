@@ -30,6 +30,14 @@ Linear API coverage:
 
 Webhook signatures:
   Stripe webhook secrets produce a Stripe-Signature header for raw-body verification.
+
+Cloudflare D1 + R2:
+  Point wrangler at the emulator with CLOUDFLARE_API_BASE_URL=http://localhost:<port>/client/v4
+  to run "wrangler d1 create", "d1 migrations apply --remote", "d1 execute --remote --command"
+  and "r2 bucket create" with no Cloudflare account. D1 and R2 are backed by Miniflare (workerd
+  SQLite), so migrations fail here in the same way they fail in production.
+  S3 clients use endpoint http://localhost:<port>/cdn-cgi/local/r2/s3 with forcePathStyle.
+  Fault injection and the outcome oracle live under /_cloudfault (GET /_cloudfault lists them).
 `,
   );
 

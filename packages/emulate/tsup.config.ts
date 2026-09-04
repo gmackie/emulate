@@ -21,6 +21,12 @@ const copyPgliteAssets = async () => {
   }
 };
 
+// The Cloudflare emulator's D1/R2 engine is Miniflare, which spawns a workerd
+// child process and resolves its own platform binary from node_modules. Unlike
+// PGlite there is nothing to copy into dist: workerd is a native executable
+// shipped by @cloudflare/workerd-<os>-<arch>, so miniflare (and workerd) stay
+// external and are loaded from the installed tree at runtime, exactly as
+// redis-memory-server is.
 const addShebang = async () => {
   const entry = resolve(__dirname, "dist/index.js");
   const content = readFileSync(entry, "utf-8");
@@ -43,7 +49,7 @@ export default defineConfig([
     splitting: true,
     sourcemap: true,
     noExternal: [/^@emulators\//],
-    external: ["redis-memory-server"],
+    external: ["redis-memory-server", "miniflare", "workerd"],
     async onSuccess() {
       await copyFonts();
       await copyPgliteAssets();
@@ -59,7 +65,7 @@ export default defineConfig([
     splitting: true,
     sourcemap: true,
     noExternal: [/^@emulators\//],
-    external: ["redis-memory-server"],
+    external: ["redis-memory-server", "miniflare", "workerd"],
     async onSuccess() {
       await copyFonts();
       await copyPgliteAssets();
