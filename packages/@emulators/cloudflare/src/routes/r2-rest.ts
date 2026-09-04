@@ -6,7 +6,7 @@ import { getEngine, bindingNameFor, type S3Credentials } from "../engine.js";
 import { Oracle } from "../oracle.js";
 import { metaNumber } from "../faults.js";
 import {
-  API_PREFIXES,
+  API_PREFIX,
   applyPreFault,
   beginAttempt,
   destroyedResponse,
@@ -169,65 +169,63 @@ export function r2RestRoutes(ctx: RouteContext): void {
   const oracle = new Oracle(ctx.store);
   const { buckets } = getCloudflareStore(ctx.store);
 
-  for (const prefix of API_PREFIXES) {
-    const base = `${prefix}/accounts/:accountId/r2/buckets`;
+  const base = `${API_PREFIX}/accounts/:accountId/r2/buckets`;
 
-    app.get(`${base}/:bucketName/objects/:objectName{.+}`, (c) => handleObject(c, ctx, oracle, "get"));
-    app.put(`${base}/:bucketName/objects/:objectName{.+}`, (c) => handleObject(c, ctx, oracle, "put"));
-    app.delete(`${base}/:bucketName/objects/:objectName{.+}`, (c) => handleObject(c, ctx, oracle, "delete"));
+  app.get(`${base}/:bucketName/objects/:objectName{.+}`, (c) => handleObject(c, ctx, oracle, "get"));
+  app.put(`${base}/:bucketName/objects/:objectName{.+}`, (c) => handleObject(c, ctx, oracle, "put"));
+  app.delete(`${base}/:bucketName/objects/:objectName{.+}`, (c) => handleObject(c, ctx, oracle, "delete"));
 
-    app.get(`${base}/:bucketName`, (c) => {
-      const row = findBucket(ctx, c.req.param("bucketName"));
-      if (!row) return failEnvelope(c, R2_CODES.NO_SUCH_BUCKET, "The specified bucket does not exist.", 404);
-      return jsonEnvelope(c, cfOk(describeBucket(row)));
+  app.get(`${base}/:bucketName`, (c) => {
+    const row = findBucket(ctx, c.req.param("bucketName"));
+    if (!row) return failEnvelope(c, R2_CODES.NO_SUCH_BUCKET, "The specified bucket does not exist.", 404);
+    return jsonEnvelope(c, cfOk(describeBucket(row)));
+  });
+
+  app.delete(`${base}/:bucketName`, async (c) => {
+    const row = findBucket(ctx, c.req.param("bucketName"));
+    if (!row) return failEnvelope(c, R2_CODES.NO_SUCH_BUCKET, "The specified bucket does not exist.", 404);
+    await getEngine().removeR2Bucket(row.binding);
+    buckets.delete(row.id);
+    return jsonEnvelope(c, cfOk(null));
+  });
+
+  app.post(base, async (c) => {
+    const body = await readJsonBody(c);
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!BUCKET_NAME.test(name)) {
+      return failEnvelope(
+        c,
+        R2_CODES.INVALID_BUCKET_NAME,
+        "The specified bucket name is not valid. Bucket names must be 3-63 lowercase alphanumeric characters or hyphens.",
+        400,
+      );
+    }
+    if (findBucket(ctx, name)) {
+      // Real R2 answers a duplicate create with HTTP 400, not 409.
+      return failEnvelope(c, R2_CODES.BUCKET_ALREADY_EXISTS, "The bucket you tried to create already exists.", 400);
+    }
+    const row = createBucketRow(ctx, {
+      name,
+      location: typeof body.locationHint === "string" ? body.locationHint : undefined,
+      storageClass: typeof body.storageClass === "string" ? body.storageClass : undefined,
+      jurisdiction: c.req.header("cf-r2-jurisdiction") ?? undefined,
+      credentials: defaultCredentialsFor(ctx, name),
     });
+    await registerBucket(row);
+    return jsonEnvelope(c, cfOk(describeBucket(row)));
+  });
 
-    app.delete(`${base}/:bucketName`, async (c) => {
-      const row = findBucket(ctx, c.req.param("bucketName"));
-      if (!row) return failEnvelope(c, R2_CODES.NO_SUCH_BUCKET, "The specified bucket does not exist.", 404);
-      await getEngine().removeR2Bucket(row.binding);
-      buckets.delete(row.id);
-      return jsonEnvelope(c, cfOk(null));
+  app.get(base, (c) => {
+    // wrangler reads `result.buckets` and sends no pagination params.
+    const rows = buckets.all().map(describeBucket);
+    return jsonEnvelope(c, {
+      success: true,
+      errors: [],
+      messages: [],
+      result: { buckets: rows },
+      result_info: { page: 1, per_page: rows.length, count: rows.length, total_count: rows.length, total_pages: 1 },
     });
-
-    app.post(base, async (c) => {
-      const body = await readJsonBody(c);
-      const name = typeof body.name === "string" ? body.name.trim() : "";
-      if (!BUCKET_NAME.test(name)) {
-        return failEnvelope(
-          c,
-          R2_CODES.INVALID_BUCKET_NAME,
-          "The specified bucket name is not valid. Bucket names must be 3-63 lowercase alphanumeric characters or hyphens.",
-          400,
-        );
-      }
-      if (findBucket(ctx, name)) {
-        // Real R2 answers a duplicate create with HTTP 400, not 409.
-        return failEnvelope(c, R2_CODES.BUCKET_ALREADY_EXISTS, "The bucket you tried to create already exists.", 400);
-      }
-      const row = createBucketRow(ctx, {
-        name,
-        location: typeof body.locationHint === "string" ? body.locationHint : undefined,
-        storageClass: typeof body.storageClass === "string" ? body.storageClass : undefined,
-        jurisdiction: c.req.header("cf-r2-jurisdiction") ?? undefined,
-        credentials: defaultCredentialsFor(ctx, name),
-      });
-      await registerBucket(row);
-      return jsonEnvelope(c, cfOk(describeBucket(row)));
-    });
-
-    app.get(base, (c) => {
-      // wrangler reads `result.buckets` and sends no pagination params.
-      const rows = buckets.all().map(describeBucket);
-      return jsonEnvelope(c, {
-        success: true,
-        errors: [],
-        messages: [],
-        result: { buckets: rows },
-        result_info: { page: 1, per_page: rows.length, count: rows.length, total_count: rows.length, total_pages: 1 },
-      });
-    });
-  }
+  });
 }
 
 /**

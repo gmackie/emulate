@@ -55,6 +55,14 @@ export const CF_CODES = {
   AUTHENTICATION: 10000,
   NOT_IMPLEMENTED: 1000,
   RATE_LIMITED: 971,
+  /**
+   * "Could not route to <path>, perhaps your object identifier is invalid?"
+   * What api.cloudflare.com answers, with HTTP 404, for an unknown path that
+   * still names an account (measured against the live API).
+   */
+  NOT_ROUTABLE: 7003,
+  /** "No route for that URI" - the live API's answer for any other unknown path. */
+  NO_ROUTE: 10404,
 } as const;
 
 export function cfOk<T>(result: T, resultInfo?: CloudflareResultInfo): CloudflareEnvelope<T> {
@@ -64,7 +72,12 @@ export function cfOk<T>(result: T, resultInfo?: CloudflareResultInfo): Cloudflar
 }
 
 export function cfFail(code: number, message: string): CloudflareEnvelope<null> {
-  return { success: false, errors: [{ code, message }], messages: [], result: null };
+  return cfFailWith([{ code, message }]);
+}
+
+/** A failure carrying more than one error entry, which the real API also returns. */
+export function cfFailWith(errors: CloudflareApiMessage[]): CloudflareEnvelope<null> {
+  return { success: false, errors, messages: [], result: null };
 }
 
 export function paginate<T>(items: T[], page: number, perPage: number): { rows: T[]; info: CloudflareResultInfo } {

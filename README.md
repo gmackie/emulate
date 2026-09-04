@@ -1119,24 +1119,24 @@ wrangler r2 bucket create my-uploads
 
 ### D1
 
-Served both at `/client/v4/accounts/:accountId/...` and at the bare `/accounts/:accountId/...`. `:databaseId` accepts a uuid or a name.
+Served only at `/client/v4/accounts/:accountId/...`, the one prefix api.cloudflare.com serves. A `CLOUDFLARE_API_BASE_URL` that omits `/client/v4` gets the same 404 envelope here that it would get in production, rather than quietly working. `:databaseId` accepts a uuid or a name.
 
-- `POST /accounts/:accountId/d1/database` - create
-- `GET /accounts/:accountId/d1/database` - list (`page`, `per_page`, `name`)
-- `GET /accounts/:accountId/d1/database/:databaseId` - info (`fields`)
-- `PATCH` / `PUT /accounts/:accountId/d1/database/:databaseId` - read replication mode
-- `DELETE /accounts/:accountId/d1/database/:databaseId` - delete
-- `POST /accounts/:accountId/d1/database/:databaseId/query` - `{ sql, params? }` or `{ batch: [...] }`, row objects
-- `POST /accounts/:accountId/d1/database/:databaseId/raw` - same, `{ columns, rows }`
+- `POST /client/v4/accounts/:accountId/d1/database` - create
+- `GET /client/v4/accounts/:accountId/d1/database` - list (`page`, `per_page`, `name`)
+- `GET /client/v4/accounts/:accountId/d1/database/:databaseId` - info (`fields`)
+- `PATCH` / `PUT /client/v4/accounts/:accountId/d1/database/:databaseId` - read replication mode
+- `DELETE /client/v4/accounts/:accountId/d1/database/:databaseId` - delete
+- `POST /client/v4/accounts/:accountId/d1/database/:databaseId/query` - `{ sql, params? }` or `{ batch: [...] }`, row objects
+- `POST /client/v4/accounts/:accountId/d1/database/:databaseId/raw` - same, `{ columns, rows }`
 
 Multi-statement `sql` is split server-side and run as one atomic batch, as the real API documents. `/import`, `/export` and `/time_travel/*` are not implemented and answer with an explanatory `success: false` envelope.
 
 ### R2
 
-- `POST /accounts/:accountId/r2/buckets` - create
-- `GET /accounts/:accountId/r2/buckets` - list
-- `GET` / `DELETE /accounts/:accountId/r2/buckets/:bucket` - info, delete
-- `PUT` / `GET` / `DELETE /accounts/:accountId/r2/buckets/:bucket/objects/:key` - object CRUD
+- `POST /client/v4/accounts/:accountId/r2/buckets` - create
+- `GET /client/v4/accounts/:accountId/r2/buckets` - list
+- `GET` / `DELETE /client/v4/accounts/:accountId/r2/buckets/:bucket` - info, delete
+- `PUT` / `GET` / `DELETE /client/v4/accounts/:accountId/r2/buckets/:bucket/objects/:key` - object CRUD
 
 The S3-compatible API is mounted at `/cdn-cgi/local/r2/s3`. The path is part of the endpoint, because SigV4 signs it, and signatures are really verified.
 

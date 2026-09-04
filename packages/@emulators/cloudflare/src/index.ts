@@ -7,6 +7,7 @@ import { r2RestRoutes } from "./routes/r2-rest.js";
 import { r2S3Routes, S3_ENDPOINT_PATH } from "./routes/r2-s3.js";
 import { controlRoutes } from "./routes/control.js";
 import { inspectorRoutes } from "./routes/inspector.js";
+import { apiNotFoundRoutes } from "./routes/not-found.js";
 
 export { getCloudflareStore, type CloudflareStore } from "./store.js";
 export * from "./entities.js";
@@ -188,13 +189,16 @@ export const cloudflarePlugin: ServicePlugin = {
   name: "cloudflare",
   register(app: Hono<AppEnv>, store: Store, webhooks: WebhookDispatcher, baseUrl: string, tokenMap?: TokenMap): void {
     const ctx: RouteContext = { app, store, webhooks, baseUrl, tokenMap };
-    // Static and prefixed paths first; the S3 front door last, because its
-    // routes use a wildcard key param.
+    // Static and prefixed paths first, then the S3 front door, because its
+    // routes use a wildcard key param. The REST catch-all is registered last
+    // of all: the router takes the first pattern that matches, so anything
+    // still unmatched under /client/v4 or /accounts is a genuine 404.
     inspectorRoutes(ctx);
     controlRoutes(ctx);
     d1Routes(ctx);
     r2RestRoutes(ctx);
     r2S3Routes(ctx);
+    apiNotFoundRoutes(ctx);
   },
   seed(store: Store, baseUrl: string): void {
     seedDefaults(store, baseUrl);

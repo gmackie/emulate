@@ -4,14 +4,17 @@ import { getFaultPlan, metaNumber, type OperationRef, type Perturbation } from "
 import { Oracle, OPERATION_TOKEN_HEADER, mintToken } from "./oracle.js";
 
 /**
- * Both prefixes are registered for every REST route.
+ * The one prefix every REST route is registered under.
  *
- * `CLOUDFLARE_API_BASE_URL` is normally set to `http://localhost:<port>/client/v4`
- * (that is the shape of the real base URL wrangler builds), but a client that
- * points at the bare origin should not silently 404, so the unprefixed form is
- * served too.
+ * api.cloudflare.com serves the REST API only at `/client/v4/...`, and
+ * `CLOUDFLARE_API_BASE_URL` is expected to include it. The emulator used to
+ * register the bare `/accounts/...` form as well, out of politeness. That was a
+ * fidelity bug of exactly the class this emulator exists to catch: a base URL
+ * missing `/client/v4` passed locally and 404d in production, and it quietly
+ * weakened any test that asserted the unprefixed path fails. Unknown paths are
+ * answered by `apiNotFoundRoutes` instead, the way the real API answers them.
  */
-export const API_PREFIXES = ["/client/v4", ""] as const;
+export const API_PREFIX = "/client/v4";
 
 export function jsonEnvelope<T>(c: Context, envelope: CloudflareEnvelope<T>, status = 200): Response {
   return c.json(envelope, status);

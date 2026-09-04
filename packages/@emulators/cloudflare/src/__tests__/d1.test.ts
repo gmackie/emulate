@@ -62,14 +62,6 @@ describe("D1 REST surface", () => {
     expect(body.errors[0].code).toBe(7502);
   });
 
-  it("serves the same routes with and without the /client/v4 prefix", async () => {
-    const h = open();
-    const prefixed = await h.request(`/client/v4/accounts/${ACCOUNT_ID}/d1/database`);
-    const bare = await h.request(`/accounts/${ACCOUNT_ID}/d1/database`);
-    expect(prefixed.status).toBe(200);
-    expect(bare.status).toBe(200);
-  });
-
   it("executes a multi-statement /query as one batch and reports real meta", async () => {
     const h = open();
     const response = await h.query(

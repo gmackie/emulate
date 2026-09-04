@@ -109,15 +109,15 @@ Databases and buckets can also be created at runtime through the API; each becom
 
 ### D1
 
-Every route is served both at `/client/v4/accounts/:accountId/...` and at the bare `/accounts/:accountId/...`.
+Every route is served only under `/client/v4`, exactly as api.cloudflare.com serves it. A request to the unprefixed `/accounts/:accountId/...` gets HTTP 404 and `{"success": false, "errors": [{"code": 7003, ...}]}`, the real API's own answer, plus a second error naming the missing prefix. If you see code 7003, check `CLOUDFLARE_API_BASE_URL` ends in `/client/v4` before suspecting the database id.
 
-- `POST /accounts/:accountId/d1/database` - create, body `{ name }`
-- `GET /accounts/:accountId/d1/database` - list, `?page`, `?per_page`, `?name`
-- `GET /accounts/:accountId/d1/database/:databaseId` - info, `?fields=`
-- `PATCH` / `PUT /accounts/:accountId/d1/database/:databaseId` - `{ read_replication: { mode } }`
-- `DELETE /accounts/:accountId/d1/database/:databaseId` - delete
-- `POST /accounts/:accountId/d1/database/:databaseId/query` - `{ sql, params? }` or `{ batch: [...] }`, results as row objects
-- `POST /accounts/:accountId/d1/database/:databaseId/raw` - same, results as `{ columns, rows }`
+- `POST /client/v4/accounts/:accountId/d1/database` - create, body `{ name }`
+- `GET /client/v4/accounts/:accountId/d1/database` - list, `?page`, `?per_page`, `?name`
+- `GET /client/v4/accounts/:accountId/d1/database/:databaseId` - info, `?fields=`
+- `PATCH` / `PUT /client/v4/accounts/:accountId/d1/database/:databaseId` - `{ read_replication: { mode } }`
+- `DELETE /client/v4/accounts/:accountId/d1/database/:databaseId` - delete
+- `POST /client/v4/accounts/:accountId/d1/database/:databaseId/query` - `{ sql, params? }` or `{ batch: [...] }`, results as row objects
+- `POST /client/v4/accounts/:accountId/d1/database/:databaseId/raw` - same, results as `{ columns, rows }`
 
 `:databaseId` accepts a uuid or a database name.
 
@@ -140,11 +140,11 @@ curl -X POST $BASE/app_dev/query -H "Content-Type: application/json" \
 
 ### R2
 
-- `POST /accounts/:accountId/r2/buckets` - create, body `{ name, locationHint?, storageClass? }`
-- `GET /accounts/:accountId/r2/buckets` - list, returns `result.buckets`
-- `GET /accounts/:accountId/r2/buckets/:bucket` - info
-- `DELETE /accounts/:accountId/r2/buckets/:bucket` - delete
-- `PUT` / `GET` / `DELETE /accounts/:accountId/r2/buckets/:bucket/objects/:key` - object CRUD, keys may contain `/`
+- `POST /client/v4/accounts/:accountId/r2/buckets` - create, body `{ name, locationHint?, storageClass? }`
+- `GET /client/v4/accounts/:accountId/r2/buckets` - list, returns `result.buckets`
+- `GET /client/v4/accounts/:accountId/r2/buckets/:bucket` - info
+- `DELETE /client/v4/accounts/:accountId/r2/buckets/:bucket` - delete
+- `PUT` / `GET` / `DELETE /client/v4/accounts/:accountId/r2/buckets/:bucket/objects/:key` - object CRUD, keys may contain `/`
 
 The S3-compatible API lives under `/cdn-cgi/local/r2/s3` and covers put, get, head, delete, list (prefix, delimiter, pagination), multipart upload, conditional headers, ranges and checksums.
 

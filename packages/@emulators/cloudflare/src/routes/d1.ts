@@ -7,7 +7,7 @@ import { splitSqlQuery, SqlSplitError } from "../sql-split.js";
 import { Oracle } from "../oracle.js";
 import { metaNumber } from "../faults.js";
 import {
-  API_PREFIXES,
+  API_PREFIX,
   applyPreFault,
   beginAttempt,
   destroyedResponse,
@@ -419,119 +419,117 @@ export function d1Routes(ctx: RouteContext): void {
   const oracle = new Oracle(ctx.store);
   const { databases } = getCloudflareStore(ctx.store);
 
-  for (const prefix of API_PREFIXES) {
-    const base = `${prefix}/accounts/:accountId/d1/database`;
+  const base = `${API_PREFIX}/accounts/:accountId/d1/database`;
 
-    app.post(`${base}/:databaseId/query`, (c) => handleQuery(c, ctx, oracle, "objects"));
-    app.post(`${base}/:databaseId/raw`, (c) => handleQuery(c, ctx, oracle, "raw"));
+  app.post(`${base}/:databaseId/query`, (c) => handleQuery(c, ctx, oracle, "objects"));
+  app.post(`${base}/:databaseId/raw`, (c) => handleQuery(c, ctx, oracle, "raw"));
 
-    app.get(`${base}/:databaseId/export`, async (c) => {
-      const row = findDatabase(ctx, c.req.param("databaseId"));
-      if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
-      // wrangler recurses on a non-"complete" export status with no sleep and
-      // no backoff, so this must complete on the first response.
-      return failEnvelope(
-        c,
-        D1_CODES.GENERIC,
-        "D1_ERROR: export is not implemented by the emulate Cloudflare emulator. Read the tables with /query instead.",
-        501,
-      );
-    });
-
-    app.post(`${base}/:databaseId/import`, (c) =>
-      failEnvelope(
-        c,
-        D1_CODES.GENERIC,
-        "D1_ERROR: the four-phase import protocol is not implemented by the emulate Cloudflare emulator. Use `wrangler d1 execute --remote --command`, or `--file` with `--local`.",
-        501,
-      ),
+  app.get(`${base}/:databaseId/export`, async (c) => {
+    const row = findDatabase(ctx, c.req.param("databaseId"));
+    if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
+    // wrangler recurses on a non-"complete" export status with no sleep and
+    // no backoff, so this must complete on the first response.
+    return failEnvelope(
+      c,
+      D1_CODES.GENERIC,
+      "D1_ERROR: export is not implemented by the emulate Cloudflare emulator. Read the tables with /query instead.",
+      501,
     );
+  });
 
-    app.get(`${base}/:databaseId/time_travel/bookmark`, (c) =>
-      failEnvelope(
-        c,
-        D1_CODES.GENERIC,
-        "D1_ERROR: time travel is not implemented by the emulate Cloudflare emulator.",
-        501,
-      ),
-    );
+  app.post(`${base}/:databaseId/import`, (c) =>
+    failEnvelope(
+      c,
+      D1_CODES.GENERIC,
+      "D1_ERROR: the four-phase import protocol is not implemented by the emulate Cloudflare emulator. Use `wrangler d1 execute --remote --command`, or `--file` with `--local`.",
+      501,
+    ),
+  );
 
-    app.post(`${base}/:databaseId/time_travel/restore`, (c) =>
-      failEnvelope(
-        c,
-        D1_CODES.GENERIC,
-        "D1_ERROR: time travel is not implemented by the emulate Cloudflare emulator.",
-        501,
-      ),
-    );
+  app.get(`${base}/:databaseId/time_travel/bookmark`, (c) =>
+    failEnvelope(
+      c,
+      D1_CODES.GENERIC,
+      "D1_ERROR: time travel is not implemented by the emulate Cloudflare emulator.",
+      501,
+    ),
+  );
 
-    app.get(`${base}/:databaseId`, async (c) => {
-      const row = findDatabase(ctx, c.req.param("databaseId"));
-      if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
-      const db = await openDatabase(row);
-      await refreshDatabaseStats(ctx, row, db);
-      const fresh = databases.get(row.id) ?? row;
-      const fields = c.req.query("fields");
-      const full = describeDatabase(fresh);
-      if (!fields) return jsonEnvelope(c, cfOk(full));
-      const wanted = new Set(fields.split(",").map((field) => field.trim()));
-      const filtered: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(full)) {
-        if (wanted.has(key)) filtered[key] = value;
-      }
-      return jsonEnvelope(c, cfOk(filtered));
-    });
+  app.post(`${base}/:databaseId/time_travel/restore`, (c) =>
+    failEnvelope(
+      c,
+      D1_CODES.GENERIC,
+      "D1_ERROR: time travel is not implemented by the emulate Cloudflare emulator.",
+      501,
+    ),
+  );
 
-    app.patch(`${base}/:databaseId`, async (c) => {
-      const row = findDatabase(ctx, c.req.param("databaseId"));
-      if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
-      const body = await readJsonBody(c);
-      const replication = body.read_replication as { mode?: string } | undefined;
-      if (replication?.mode === "auto" || replication?.mode === "disabled") {
-        databases.update(row.id, { read_replication_mode: replication.mode });
-      }
-      return jsonEnvelope(c, cfOk(describeDatabase(databases.get(row.id) ?? row)));
-    });
+  app.get(`${base}/:databaseId`, async (c) => {
+    const row = findDatabase(ctx, c.req.param("databaseId"));
+    if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
+    const db = await openDatabase(row);
+    await refreshDatabaseStats(ctx, row, db);
+    const fresh = databases.get(row.id) ?? row;
+    const fields = c.req.query("fields");
+    const full = describeDatabase(fresh);
+    if (!fields) return jsonEnvelope(c, cfOk(full));
+    const wanted = new Set(fields.split(",").map((field) => field.trim()));
+    const filtered: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(full)) {
+      if (wanted.has(key)) filtered[key] = value;
+    }
+    return jsonEnvelope(c, cfOk(filtered));
+  });
 
-    app.put(`${base}/:databaseId`, async (c) => {
-      const row = findDatabase(ctx, c.req.param("databaseId"));
-      if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
-      const body = await readJsonBody(c);
-      const replication = body.read_replication as { mode?: string } | undefined;
-      if (replication?.mode === "auto" || replication?.mode === "disabled") {
-        databases.update(row.id, { read_replication_mode: replication.mode });
-      }
-      return jsonEnvelope(c, cfOk(describeDatabase(databases.get(row.id) ?? row)));
-    });
+  app.patch(`${base}/:databaseId`, async (c) => {
+    const row = findDatabase(ctx, c.req.param("databaseId"));
+    if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
+    const body = await readJsonBody(c);
+    const replication = body.read_replication as { mode?: string } | undefined;
+    if (replication?.mode === "auto" || replication?.mode === "disabled") {
+      databases.update(row.id, { read_replication_mode: replication.mode });
+    }
+    return jsonEnvelope(c, cfOk(describeDatabase(databases.get(row.id) ?? row)));
+  });
 
-    app.delete(`${base}/:databaseId`, async (c) => {
-      const row = findDatabase(ctx, c.req.param("databaseId"));
-      if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
-      await getEngine().removeD1Database(row.binding);
-      databases.delete(row.id);
-      return jsonEnvelope(c, cfOk(null));
-    });
+  app.put(`${base}/:databaseId`, async (c) => {
+    const row = findDatabase(ctx, c.req.param("databaseId"));
+    if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
+    const body = await readJsonBody(c);
+    const replication = body.read_replication as { mode?: string } | undefined;
+    if (replication?.mode === "auto" || replication?.mode === "disabled") {
+      databases.update(row.id, { read_replication_mode: replication.mode });
+    }
+    return jsonEnvelope(c, cfOk(describeDatabase(databases.get(row.id) ?? row)));
+  });
 
-    app.post(base, async (c) => {
-      const body = await readJsonBody(c);
-      const name = typeof body.name === "string" ? body.name.trim() : "";
-      if (!name) return failEnvelope(c, D1_CODES.GENERIC, "D1_ERROR: `name` is required", 400);
-      if (databases.findOneBy("name", name)) {
-        return failEnvelope(c, D1_CODES.NAME_EXISTS, "A database with that name already exists", 400);
-      }
-      const row = createDatabaseRow(ctx, name);
-      await getEngine().addD1Database(row.binding, row.uuid);
-      return jsonEnvelope(c, cfOk(describeDatabase(row)));
-    });
+  app.delete(`${base}/:databaseId`, async (c) => {
+    const row = findDatabase(ctx, c.req.param("databaseId"));
+    if (!row) return failEnvelope(c, D1_CODES.NOT_FOUND, "D1_ERROR: Database not found", 404);
+    await getEngine().removeD1Database(row.binding);
+    databases.delete(row.id);
+    return jsonEnvelope(c, cfOk(null));
+  });
 
-    app.get(base, (c) => {
-      const name = c.req.query("name");
-      const all = databases
-        .all()
-        .filter((row) => (name ? row.name.includes(name) : true))
-        .map(describeDatabaseBrief);
-      const { rows, info } = paginate(all, Number(c.req.query("page") ?? 1), Number(c.req.query("per_page") ?? 10));
-      return jsonEnvelope(c, cfOk(rows, info));
-    });
-  }
+  app.post(base, async (c) => {
+    const body = await readJsonBody(c);
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) return failEnvelope(c, D1_CODES.GENERIC, "D1_ERROR: `name` is required", 400);
+    if (databases.findOneBy("name", name)) {
+      return failEnvelope(c, D1_CODES.NAME_EXISTS, "A database with that name already exists", 400);
+    }
+    const row = createDatabaseRow(ctx, name);
+    await getEngine().addD1Database(row.binding, row.uuid);
+    return jsonEnvelope(c, cfOk(describeDatabase(row)));
+  });
+
+  app.get(base, (c) => {
+    const name = c.req.query("name");
+    const all = databases
+      .all()
+      .filter((row) => (name ? row.name.includes(name) : true))
+      .map(describeDatabaseBrief);
+    const { rows, info } = paginate(all, Number(c.req.query("page") ?? 1), Number(c.req.query("per_page") ?? 10));
+    return jsonEnvelope(c, cfOk(rows, info));
+  });
 }

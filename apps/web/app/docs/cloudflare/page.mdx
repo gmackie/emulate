@@ -45,15 +45,15 @@ Objects written through the S3 API and through `wrangler r2 object put` are the 
 
 ## D1
 
-Every route is served both at `/client/v4/accounts/:accountId/...` and at the bare `/accounts/:accountId/...`. `:databaseId` accepts a uuid or a database name.
+Every route is served only under `/client/v4`, exactly as api.cloudflare.com serves it. A request to the unprefixed `/accounts/:accountId/...` gets HTTP 404 and the real API's `{ success: false, errors: [{ code: 7003 }] }` envelope, plus a second error naming the missing prefix, so a `CLOUDFLARE_API_BASE_URL` without `/client/v4` fails locally the way it fails in production. `:databaseId` accepts a uuid or a database name.
 
-- `POST /accounts/:accountId/d1/database` - create, body `{ name }`
-- `GET /accounts/:accountId/d1/database` - list (`page`, `per_page`, `name`)
-- `GET /accounts/:accountId/d1/database/:databaseId` - info (`fields`)
-- `PATCH` / `PUT /accounts/:accountId/d1/database/:databaseId` - `{ read_replication: { mode } }`
-- `DELETE /accounts/:accountId/d1/database/:databaseId` - delete
-- `POST /accounts/:accountId/d1/database/:databaseId/query` - `{ sql, params? }` or `{ batch: [...] }`, results as row objects
-- `POST /accounts/:accountId/d1/database/:databaseId/raw` - same, results as `{ columns, rows }`
+- `POST /client/v4/accounts/:accountId/d1/database` - create, body `{ name }`
+- `GET /client/v4/accounts/:accountId/d1/database` - list (`page`, `per_page`, `name`)
+- `GET /client/v4/accounts/:accountId/d1/database/:databaseId` - info (`fields`)
+- `PATCH` / `PUT /client/v4/accounts/:accountId/d1/database/:databaseId` - `{ read_replication: { mode } }`
+- `DELETE /client/v4/accounts/:accountId/d1/database/:databaseId` - delete
+- `POST /client/v4/accounts/:accountId/d1/database/:databaseId/query` - `{ sql, params? }` or `{ batch: [...] }`, results as row objects
+- `POST /client/v4/accounts/:accountId/d1/database/:databaseId/raw` - same, results as `{ columns, rows }`
 
 A `sql` string may contain several statements joined by semicolons. They are split server-side, as the real API documents, and run as one atomic batch. Bound parameters apply to a single statement, as with real D1.
 
@@ -63,11 +63,11 @@ A `sql` string may contain several statements joined by semicolons. They are spl
 
 ## R2
 
-- `POST /accounts/:accountId/r2/buckets` - create, body `{ name, locationHint?, storageClass? }`
-- `GET /accounts/:accountId/r2/buckets` - list, returns `result.buckets`
-- `GET /accounts/:accountId/r2/buckets/:bucket` - info
-- `DELETE /accounts/:accountId/r2/buckets/:bucket` - delete
-- `PUT` / `GET` / `DELETE /accounts/:accountId/r2/buckets/:bucket/objects/:key` - object CRUD, keys may contain `/`
+- `POST /client/v4/accounts/:accountId/r2/buckets` - create, body `{ name, locationHint?, storageClass? }`
+- `GET /client/v4/accounts/:accountId/r2/buckets` - list, returns `result.buckets`
+- `GET /client/v4/accounts/:accountId/r2/buckets/:bucket` - info
+- `DELETE /client/v4/accounts/:accountId/r2/buckets/:bucket` - delete
+- `PUT` / `GET` / `DELETE /client/v4/accounts/:accountId/r2/buckets/:bucket/objects/:key` - object CRUD, keys may contain `/`
 
 The S3 API under `/cdn-cgi/local/r2/s3` covers put, get, head, delete, list with prefix, delimiter and pagination, multipart upload, conditional headers, ranges and checksums.
 
