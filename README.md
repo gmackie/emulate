@@ -24,6 +24,8 @@ All services start with sensible defaults. No config file needed:
 - **Clerk** on `http://localhost:4011`
 - **Linear** on `http://localhost:4012`
 - **Twilio** on `http://localhost:4013`
+- **PostgreSQL** on `http://localhost:4014` (wire protocol on `localhost:5432`)
+- **Redis** on `http://localhost:4015` (wire protocol on `localhost:6379`)
 - **Cloudflare D1 + R2** on `http://localhost:4016`
 
 Stripe webhooks configured with a secret include a `Stripe-Signature` header signed over the timestamp and raw request body.
@@ -1037,6 +1039,64 @@ All operations via `POST /iam/` with `Action` parameter:
 ### STS
 All operations via `POST /sts/` with `Action` parameter:
 - `GetCallerIdentity`, `AssumeRole`
+
+## PostgreSQL
+
+Postgres 17.4 compiled to WASM via [PGlite](https://pglite.dev), fronted by `PGLiteSocketServer` so it speaks the real Postgres wire protocol. Any Postgres client or driver connects to it unchanged, with no Docker and no system install.
+
+This service listens on **two** ports. The wire protocol port, `5432` by default, is what `psql` and every driver connect to and is set by `port` in the seed config. The HTTP admin and inspector port is the ordinary emulate port, `basePort + index`. The banner prints both:
+
+```
+  postgres  http://localhost:4014  (wire: localhost:5432)
+```
+
+The wire server is started from the seed config, so postgres needs a config file. Without one the HTTP admin app still starts, but nothing listens on 5432.
+
+```yaml
+postgres:
+  # Wire protocol port. NOT the HTTP admin port.
+  port: 5432
+  # PGlite data directory. Its parent must already exist: PGlite's mkdir is
+  # not recursive, so ./data/pglite requires ./data to be there first.
+  data_dir: ./data/pglite
+  databases:
+    - name: app_dev
+      extensions: [uuid-ossp]
+```
+
+```bash
+psql postgresql://postgres@localhost:5432/postgres
+```
+
+On the HTTP port: `GET /status`, `POST /reset` (drops every table in `public`), `GET /databases`, and an inspector at `/` with `/tables` and `/query` tabs.
+
+Data lives in `data_dir`, outside emulate's store snapshot, so it is not covered by the programmatic API's persistence adapter.
+
+## Redis
+
+A real Redis server managed by [redis-memory-server](https://www.npmjs.com/package/redis-memory-server). Any Redis client connects to it unchanged, because it is Redis.
+
+Like postgres, this service listens on **two** ports: the wire protocol port, `6379` by default, set by `port` in the seed config, and the ordinary HTTP admin and inspector port.
+
+```
+  redis  http://localhost:4015  (wire: localhost:6379)
+```
+
+```yaml
+redis:
+  # Wire protocol port. NOT the HTTP admin port.
+  port: 6379
+  binary:
+    version: "7.2.4"
+```
+
+```bash
+redis-cli -p 6379 ping
+```
+
+`redis-memory-server` downloads or builds a real Redis binary on first use. Where that build fails, point it at an installed Redis with `REDISMS_SYSTEM_BINARY=/path/to/redis-server`.
+
+On the HTTP port: `GET /status` and an inspector at `/` with a `/keys` tab. `POST /reset` and `POST /flush` answer 501 on purpose, because flushing is a Redis operation and belongs to a Redis client (`redis-cli FLUSHALL`).
 
 ## Cloudflare D1 and R2
 

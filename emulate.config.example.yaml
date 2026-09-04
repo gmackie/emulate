@@ -148,3 +148,19 @@ cloudflare:
       # http://localhost:<port>/cdn-cgi/local/r2/s3 with forcePathStyle: true
       - name: app-uploads
 
+
+postgres:
+  # `port` is the raw TCP wire-protocol port that psql and Postgres drivers
+  # connect to, NOT the HTTP admin/inspector port (that one is basePort + index).
+  port: 5432
+  # PGlite's data directory. Its parent must already exist.
+  data_dir: ./data/pglite
+  databases:
+    - name: app_dev
+      extensions:
+        - uuid-ossp
+
+redis:
+  # `port` is the raw TCP wire-protocol port that redis-cli and Redis clients
+  # connect to, NOT the HTTP admin/inspector port.
+  port: 6379

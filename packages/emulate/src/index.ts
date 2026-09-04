@@ -38,6 +38,12 @@ Cloudflare D1 + R2:
   SQLite), so migrations fail here in the same way they fail in production.
   S3 clients use endpoint http://localhost:<port>/cdn-cgi/local/r2/s3 with forcePathStyle.
   Fault injection and the outcome oracle live under /_cloudfault (GET /_cloudfault lists them).
+
+Wire protocol services:
+  postgres (PGlite) and redis (redis-memory-server) each listen on TWO ports. The raw TCP port
+  psql/redis-cli connect to is set by "port:" in their seed config (5432 and 6379 by default);
+  the HTTP admin and inspector port is the ordinary emulate port. The banner prints both, and
+  the wire server only starts when a seed config is present.
 `,
   );
 
