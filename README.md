@@ -24,6 +24,7 @@ All services start with sensible defaults. No config file needed:
 - **Clerk** on `http://localhost:4011`
 - **Linear** on `http://localhost:4012`
 - **Twilio** on `http://localhost:4013`
+- **Cloudflare D1 + R2** on `http://localhost:4016`
 
 Stripe webhooks configured with a secret include a `Stripe-Signature` header signed over the timestamp and raw request body.
 
@@ -1036,6 +1037,83 @@ All operations via `POST /iam/` with `Action` parameter:
 ### STS
 All operations via `POST /sts/` with `Action` parameter:
 - `GetCallerIdentity`, `AssumeRole`
+
+## Cloudflare D1 and R2
+
+D1 and R2 emulation backed by Miniflare, which runs workerd's SQLite. That is the same engine production D1 runs on, so SQL behaves the way it behaves in production, quirks included. They share one service because they share one account namespace, one response envelope, one Miniflare instance, and one `CLOUDFLARE_API_BASE_URL`.
+
+### Pointing wrangler at the emulator
+
+One environment variable redirects every `wrangler d1` and `wrangler r2` call. No proxy, no hosts file.
+
+```bash
+export CLOUDFLARE_API_BASE_URL="http://localhost:4016/client/v4"
+export CLOUDFLARE_ACCOUNT_ID="0000000000000000000000000000000000"
+export CLOUDFLARE_API_TOKEN="dev-cloudflare-token"
+
+wrangler d1 create my-app
+wrangler d1 migrations apply DB --remote
+wrangler d1 execute DB --remote --command "SELECT 1"
+wrangler r2 bucket create my-uploads
+```
+
+### D1
+
+Served both at `/client/v4/accounts/:accountId/...` and at the bare `/accounts/:accountId/...`. `:databaseId` accepts a uuid or a name.
+
+- `POST /accounts/:accountId/d1/database` - create
+- `GET /accounts/:accountId/d1/database` - list (`page`, `per_page`, `name`)
+- `GET /accounts/:accountId/d1/database/:databaseId` - info (`fields`)
+- `PATCH` / `PUT /accounts/:accountId/d1/database/:databaseId` - read replication mode
+- `DELETE /accounts/:accountId/d1/database/:databaseId` - delete
+- `POST /accounts/:accountId/d1/database/:databaseId/query` - `{ sql, params? }` or `{ batch: [...] }`, row objects
+- `POST /accounts/:accountId/d1/database/:databaseId/raw` - same, `{ columns, rows }`
+
+Multi-statement `sql` is split server-side and run as one atomic batch, as the real API documents. `/import`, `/export` and `/time_travel/*` are not implemented and answer with an explanatory `success: false` envelope.
+
+### R2
+
+- `POST /accounts/:accountId/r2/buckets` - create
+- `GET /accounts/:accountId/r2/buckets` - list
+- `GET` / `DELETE /accounts/:accountId/r2/buckets/:bucket` - info, delete
+- `PUT` / `GET` / `DELETE /accounts/:accountId/r2/buckets/:bucket/objects/:key` - object CRUD
+
+The S3-compatible API is mounted at `/cdn-cgi/local/r2/s3`. The path is part of the endpoint, because SigV4 signs it, and signatures are really verified.
+
+```typescript
+new S3Client({
+  region: "auto",
+  endpoint: "http://localhost:4016/cdn-cgi/local/r2/s3",
+  forcePathStyle: true,
+  credentials: { accessKeyId, secretAccessKey },
+});
+```
+
+### Fault injection and the outcome oracle
+
+`GET /_cloudfault` documents the surface at runtime.
+
+```
+POST   /_cloudfault/plan            { perturbations, allowContractProbes? }
+DELETE /_cloudfault/plan
+GET    /_cloudfault/events
+POST   /_cloudfault/reset
+GET    /_cloudfault/outcome/:token
+GET    /_cloudfault/version/:resource
+GET    /_cloudfault/snapshot
+```
+
+Send `x-emulate-operation: <token>` on a request and ask the oracle about it afterwards. The token is caller-minted on purpose: under `commit-then-response-lost` the response is destroyed, so a token read off the response could never be used to ask about the one request worth asking about. An unknown token answers 404; the emulator never guesses "committed".
+
+Contract probes (`partial-batch-application`, `migration-partial-then-fail`, `r2-list-after-put-stale`) model nothing Cloudflare does, since real D1 batches are atomic and real R2 list is strongly consistent. They are refused unless the plan sets `allowContractProbes: true`.
+
+### The migration quirk
+
+drizzle-kit rebuilds a table by creating `__new_<table>`, copying rows, dropping the original and renaming, wrapped in `PRAGMA foreign_keys=OFF` / `=ON`. D1 accepts that pragma with no error and ignores it, so the `DROP TABLE` cascade-deletes every child row and the migration still reports success. The emulator reproduces this because Miniflare is that same SQLite. A `node:sqlite` backend would honour the pragma and report the migration as safe.
+
+### Known limitation
+
+`drizzle-kit`'s `d1-http` driver hardcodes `https://api.cloudflare.com` with no base-URL override, so `drizzle-kit push` / `migrate` / `studio` / `introspect` cannot be pointed at the emulator. Use `drizzle-kit generate`, which is offline, and apply with `wrangler d1 migrations apply`.
 
 ## Next.js Integration
 

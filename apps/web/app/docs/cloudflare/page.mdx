@@ -1,0 +1,168 @@
+# Cloudflare D1 and R2
+
+D1 and R2 emulation backed by Miniflare, which runs workerd's SQLite. That is the same engine production D1 runs on, so SQL behaves the way it behaves in production, quirks included.
+
+D1 and R2 live in one service because they share one account namespace, one `{ success, errors, messages, result }` envelope, one Miniflare instance, and one `CLOUDFLARE_API_BASE_URL`. wrangler cannot be pointed at two origins.
+
+## Pointing wrangler at the emulator
+
+One environment variable redirects every `wrangler d1` and `wrangler r2` call. No proxy, no hosts file.
+
+```bash
+export CLOUDFLARE_API_BASE_URL="http://localhost:4007/client/v4"
+export CLOUDFLARE_ACCOUNT_ID="0000000000000000000000000000000000"
+export CLOUDFLARE_API_TOKEN="dev-cloudflare-token"
+
+wrangler d1 create my-app
+wrangler d1 migrations apply DB --remote
+wrangler d1 execute DB --remote --command "SELECT 1"
+wrangler r2 bucket create my-uploads
+```
+
+This is what makes the remote-only half of a Cloudflare deploy pipeline runnable on a laptop and in CI.
+
+## Pointing an S3 client at R2
+
+The S3-compatible API is mounted at `/cdn-cgi/local/r2/s3`, and the path is part of the endpoint: SigV4 signs the request path, so the prefix cannot be dropped. Signatures are really verified.
+
+```typescript
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+
+const s3 = new S3Client({
+  region: "auto",
+  endpoint: "http://localhost:4007/cdn-cgi/local/r2/s3",
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+});
+
+await s3.send(new PutObjectCommand({ Bucket: "my-uploads", Key: "img/logo.png", Body: bytes }));
+```
+
+Objects written through the S3 API and through `wrangler r2 object put` are the same objects.
+
+## D1
+
+Every route is served both at `/client/v4/accounts/:accountId/...` and at the bare `/accounts/:accountId/...`. `:databaseId` accepts a uuid or a database name.
+
+- `POST /accounts/:accountId/d1/database` - create, body `{ name }`
+- `GET /accounts/:accountId/d1/database` - list (`page`, `per_page`, `name`)
+- `GET /accounts/:accountId/d1/database/:databaseId` - info (`fields`)
+- `PATCH` / `PUT /accounts/:accountId/d1/database/:databaseId` - `{ read_replication: { mode } }`
+- `DELETE /accounts/:accountId/d1/database/:databaseId` - delete
+- `POST /accounts/:accountId/d1/database/:databaseId/query` - `{ sql, params? }` or `{ batch: [...] }`, results as row objects
+- `POST /accounts/:accountId/d1/database/:databaseId/raw` - same, results as `{ columns, rows }`
+
+A `sql` string may contain several statements joined by semicolons. They are split server-side, as the real API documents, and run as one atomic batch. Bound parameters apply to a single statement, as with real D1.
+
+`meta` carries the real `changes`, `last_row_id`, `rows_read`, `rows_written`, `changed_db` and `size_after`. `duration` is synthesized from wall clock, because workerd clamps its own timer to zero.
+
+`/import`, `/export` and `/time_travel/*` are not implemented and answer with an explanatory `success: false` envelope.
+
+## R2
+
+- `POST /accounts/:accountId/r2/buckets` - create, body `{ name, locationHint?, storageClass? }`
+- `GET /accounts/:accountId/r2/buckets` - list, returns `result.buckets`
+- `GET /accounts/:accountId/r2/buckets/:bucket` - info
+- `DELETE /accounts/:accountId/r2/buckets/:bucket` - delete
+- `PUT` / `GET` / `DELETE /accounts/:accountId/r2/buckets/:bucket/objects/:key` - object CRUD, keys may contain `/`
+
+The S3 API under `/cdn-cgi/local/r2/s3` covers put, get, head, delete, list with prefix, delimiter and pagination, multipart upload, conditional headers, ranges and checksums.
+
+## Seed Config
+
+```yaml
+cloudflare:
+  port: 4007
+  account_id: "0000000000000000000000000000000000"
+  api_token: dev-cloudflare-token
+  # Omit to keep everything in memory for the life of the process.
+  persist_dir: .emulate/cloudflare
+  d1:
+    databases:
+      - name: app_dev
+        id: 11111111-1111-4111-8111-111111111111
+  r2:
+    buckets:
+      - name: app-uploads
+        s3_access_key_id: AKIAEMULATE
+        s3_secret_access_key: emulate-secret
+```
+
+`port` is the ordinary HTTP port; D1 and R2 are HTTP only, so unlike postgres and redis there is no separate wire-protocol port. Omitted S3 credentials are generated and written to `--generated-secrets-file`. Databases and buckets created at runtime become new bindings on the running Miniflare instance rather than new processes.
+
+## Fault Injection and the Oracle
+
+`GET /_cloudfault` documents the surface at runtime.
+
+```
+POST   /_cloudfault/plan            { perturbations, allowContractProbes? }
+DELETE /_cloudfault/plan
+GET    /_cloudfault/plan
+GET    /_cloudfault/events
+POST   /_cloudfault/reset
+
+GET    /_cloudfault/outcome/:token
+GET    /_cloudfault/version/:resource
+GET    /_cloudfault/snapshot
+```
+
+A perturbation is a data record with a `kind`, a `phase`, and an optional `selector` that addresses it by operation, resource, occurrence or execution index rather than by "the third call".
+
+Kinds: `commit-then-response-lost`, `commit-then-timeout`, `commit-then-disconnect`, `timeout-before-send`, `reject-before-commit`, `error-after-commit`, `rate-limit`, `malformed-response`, `latency`, `signature-rejected`, `r2-conditional-race`, plus the contract probes `partial-batch-application`, `migration-partial-then-fail` and `r2-list-after-put-stale`.
+
+Contract probes model nothing Cloudflare does: real D1 batches are atomic and real R2 list is strongly consistent. They exist to discover undocumented reliance on those guarantees, and a plan containing one is refused unless it sets `allowContractProbes: true`.
+
+### Asking what actually committed
+
+Send `x-emulate-operation: <token>` on a request, then ask about it afterwards. The token is caller-minted on purpose: under `commit-then-response-lost` the response is destroyed, so a token read off the response could never be used to ask about the one request worth asking about.
+
+```bash
+curl -X POST http://localhost:4007/_cloudfault/plan -H "Content-Type: application/json" -d '{
+  "perturbations": [{
+    "id": "lost-1", "target": "*", "kind": "commit-then-response-lost",
+    "phase": "after-commit-before-response", "operation": "d1.query"
+  }]
+}'
+
+# The connection is destroyed. curl exits 52, "Empty reply from server".
+curl -X POST "$BASE/app_dev/query" \
+  -H "Content-Type: application/json" \
+  -H "x-emulate-operation: demo-1" \
+  -d '{"sql":"INSERT INTO t (name) VALUES (\"lost\")"}'
+
+curl http://localhost:4007/_cloudfault/outcome/demo-1
+```
+
+```json
+{
+  "actual": "committed",
+  "observed": "indeterminate",
+  "version": 3,
+  "applied": [{ "index": 0, "committed": true }],
+  "evidence": { "changes": 1, "rows_written": 1, "last_row_id": 1, "statements": 1 },
+  "fault": { "id": "lost-1", "kind": "commit-then-response-lost" }
+}
+```
+
+An unknown token answers 404. The emulator never guesses "committed", so a caller that cannot get an answer has to record the outcome as unknown.
+
+## Why Miniflare, and the quirk it buys you
+
+drizzle-kit rebuilds a table by creating `__new_<table>`, copying rows across, dropping the original and renaming, wrapped in `PRAGMA foreign_keys=OFF` / `=ON`. In D1 that pragma is accepted with no error and is a silent no-op, because workerd's SQLite always holds an open write transaction and SQLite treats the pragma as a no-op inside one. The `DROP TABLE` therefore runs with foreign keys still enforced, `ON DELETE CASCADE` removes every child row, and the migration reports total success.
+
+The emulator reproduces this exactly, because Miniflare is that same SQLite. A `node:sqlite` backend would honour the pragma and report the migration as safe, which is worse than having no emulator: it manufactures confidence about the one failure worth catching.
+
+Apply your migrations against the emulator and assert row counts in every table with an incoming `ON DELETE CASCADE` foreign key, and the bug surfaces in CI.
+
+## Inspector
+
+`GET /_inspector` has tabs for D1, R2, Operations and Faults. The Operations tab is the oracle ledger: what actually happened, keyed by token.
+
+## Known limitation: drizzle-kit
+
+`drizzle-kit`'s `d1-http` driver hardcodes `https://api.cloudflare.com` at both of its call sites and reads no base-URL override from config or the environment. `drizzle-kit push`, `migrate`, `studio` and `introspect` cannot be pointed at the emulator.
+
+Use `drizzle-kit generate`, which is offline and needs no network, and apply the generated migrations with `wrangler d1 migrations apply`, which works against the emulator.

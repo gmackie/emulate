@@ -29,6 +29,7 @@ const sections: NavSection[] = [
       { href: "/docs/apple", label: "Apple" },
       { href: "/docs/microsoft", label: "Microsoft Entra ID" },
       { href: "/docs/aws", label: "AWS" },
+      { href: "/docs/cloudflare", label: "Cloudflare D1 + R2" },
       { href: "/docs/okta", label: "Okta" },
       { href: "/docs/mongoatlas", label: "MongoDB Atlas" },
       { href: "/docs/resend", label: "Resend" },

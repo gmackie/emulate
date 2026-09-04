@@ -13,6 +13,7 @@ export const PAGE_TITLES: Record<string, string> = {
   apple: "Apple Sign In",
   microsoft: "Microsoft Entra ID",
   aws: "AWS",
+  cloudflare: "Cloudflare D1 + R2",
   okta: "Okta",
   mongoatlas: "MongoDB Atlas",
   resend: "Resend",

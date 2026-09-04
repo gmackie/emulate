@@ -18,6 +18,7 @@ export const allDocsPages: NavItem[] = [
   { name: "Apple Sign In", href: "/docs/apple" },
   { name: "Microsoft Entra ID", href: "/docs/microsoft" },
   { name: "AWS", href: "/docs/aws" },
+  { name: "Cloudflare D1 + R2", href: "/docs/cloudflare" },
   { name: "Okta", href: "/docs/okta" },
   { name: "MongoDB Atlas", href: "/docs/mongoatlas" },
   { name: "Resend", href: "/docs/resend" },
