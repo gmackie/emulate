@@ -15,7 +15,7 @@ npm install @emulators/core
 The core provides the shared infrastructure that every `@emulators/*` service plugin builds on:
 
 - **Store** — a generic in-memory store with typed `Collection<T>` instances supporting CRUD, indexing, filtering, and pagination
-- **Server** — Hono-based HTTP server with automatic port management
+- **Server** — HTTP server with automatic port management
 - **Middleware** — bearer token auth, error handling, CORS
 - **UI** — shared authorization/consent page rendering with bundled fonts
 - **Persistence** — pluggable save/load adapters for state durability
@@ -34,12 +34,16 @@ persistence: filePersistence('.emulate/state.json')
 
 ### Custom adapter
 
-Any object with `load` and `save` methods works:
+Any object with `load` and `save` methods works. Add `initialize` when a service generates durable identity:
 
 ```typescript
 const kvAdapter = {
   async load() { return await kv.get('emulate-state') },
   async save(data: string) { await kv.set('emulate-state', data) },
+  async initialize(data: string) { // atomic create-or-read
+    await kv.set('emulate-state', data, { nx: true })
+    return (await kv.get('emulate-state'))!
+  },
 }
 ```
 

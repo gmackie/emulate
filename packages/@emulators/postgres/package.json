@@ -1,6 +1,6 @@
 {
   "name": "@emulators/postgres",
-  "version": "0.5.3",
+  "version": "0.11.0",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,8 +34,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.4.5",
     "@electric-sql/pglite-socket": "^0.1.5",
-    "@emulators/core": "workspace:*",
-    "hono": "^4"
+    "@emulators/core": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8",

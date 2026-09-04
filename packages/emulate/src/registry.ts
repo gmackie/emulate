@@ -1,9 +1,20 @@
 import type { ServicePlugin, Store, AppKeyResolver, AuthFallback, WebhookDispatcher } from "@emulators/core";
 
+export interface PreparedServiceSeed {
+  config: Record<string, unknown>;
+  generatedSecrets: Array<{
+    kind: string;
+    id: string;
+    label: string;
+    value: string;
+  }>;
+}
+
 export interface LoadedService {
   plugin: ServicePlugin;
   seedFromConfig?(store: Store, baseUrl: string, config: unknown, webhooks?: WebhookDispatcher): void;
   createAppKeyResolver?(store: Store): AppKeyResolver;
+  prepareSeed?(config: Record<string, unknown>): Promise<PreparedServiceSeed>;
 }
 
 export interface ServiceEntry {
@@ -27,6 +38,8 @@ const SERVICE_NAME_LIST = [
   "stripe",
   "mongoatlas",
   "clerk",
+  "linear",
+  "twilio",
   "postgres",
   "redis",
 ] as const;
@@ -36,7 +49,7 @@ export const SERVICE_NAMES: readonly ServiceName[] = SERVICE_NAME_LIST;
 export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
   vercel: {
     label: "Vercel REST API emulator",
-    endpoints: "projects, deployments, domains, env vars, users, teams, file uploads, protection bypass",
+    endpoints: "projects, deployments, domains, env vars, users, teams, file uploads, protection bypass, blob storage",
     async load() {
       const mod = await import("@emulators/vercel");
       return { plugin: mod.vercelPlugin, seedFromConfig: mod.seedFromConfig };
@@ -71,18 +84,8 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
       return {
         plugin: mod.githubPlugin,
         seedFromConfig: mod.seedFromConfig,
-        createAppKeyResolver(store: Store): AppKeyResolver {
-          return (appId: number) => {
-            try {
-              const gh = mod.getGitHubStore(store);
-              const ghApp = gh.apps.all().find((a) => a.app_id === appId);
-              if (!ghApp) return null;
-              return { privateKey: ghApp.private_key, slug: ghApp.slug, name: ghApp.name };
-            } catch {
-              return null;
-            }
-          };
-        },
+        prepareSeed: mod.prepareSeed,
+        createAppKeyResolver: mod.createAppKeyResolver,
       };
     },
     defaultFallback(cfg) {
@@ -217,18 +220,35 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
 
   slack: {
     label: "Slack API emulator",
-    endpoints: "auth, chat, conversations, users, reactions, team, OAuth, incoming webhooks",
+    endpoints:
+      "auth, chat, conversations, users, profiles, presence, files, pins, bookmarks, views, reactions, team, OAuth, incoming webhooks, inspector",
     async load() {
       const mod = await import("@emulators/slack");
       return { plugin: mod.slackPlugin, seedFromConfig: mod.seedFromConfig };
     },
     defaultFallback() {
-      return { login: "U000000001", id: 1, scopes: ["chat:write", "channels:read", "users:read", "reactions:write"] };
+      return {
+        login: "U000000001",
+        id: 1,
+        scopes: [],
+      };
     },
     initConfig: {
       slack: {
         team: { name: "My Workspace", domain: "my-workspace" },
-        users: [{ name: "developer", real_name: "Developer", email: "dev@example.com" }],
+        users: [
+          {
+            name: "developer",
+            real_name: "Developer",
+            email: "dev@example.com",
+            profile: {
+              title: "Local Developer",
+              status_text: "Testing locally",
+              status_emoji: ":computer:",
+            },
+            presence: "active",
+          },
+        ],
         channels: [
           { name: "general", topic: "General discussion" },
           { name: "random", topic: "Random stuff" },
@@ -238,10 +258,45 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
           {
             client_id: "12345.67890",
             client_secret: "example_client_secret",
+            app_id: "A000000001",
             name: "My Slack App",
             redirect_uris: ["http://localhost:3000/api/auth/callback/slack"],
+            scopes: [
+              "chat:write",
+              "channels:read",
+              "channels:history",
+              "channels:join",
+              "channels:manage",
+              "channels:write",
+              "groups:read",
+              "groups:history",
+              "groups:write",
+              "im:read",
+              "im:history",
+              "im:write",
+              "mpim:read",
+              "mpim:history",
+              "mpim:write",
+              "users:read",
+              "users:read.email",
+              "users.profile:read",
+              "users.profile:write",
+              "users:write",
+              "files:read",
+              "files:write",
+              "pins:read",
+              "pins:write",
+              "bookmarks:read",
+              "bookmarks:write",
+              "reactions:read",
+              "reactions:write",
+              "team:read",
+            ],
+            user_scopes: ["users:read", "users.profile:read"],
+            bot_name: "my-bot",
           },
         ],
+        strict_scopes: false,
       },
     },
   },
@@ -452,6 +507,72 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
       },
     },
   },
+  linear: {
+    label: "Linear GraphQL API emulator",
+    endpoints:
+      "GraphQL, OAuth, issues, teams, users, workflow states, comments, labels, projects, cycles, webhooks, agents, inspector",
+    async load() {
+      const mod = await import("@emulators/linear");
+      return { plugin: mod.linearPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback(cfg) {
+      const firstEmail = (cfg?.users as Array<{ email?: string }> | undefined)?.[0]?.email ?? "admin@linear.local";
+      return { login: firstEmail, id: 1, scopes: [] };
+    },
+    initConfig: {
+      linear: {
+        organization: { name: "Acme", url_key: "acme" },
+        users: [
+          { email: "admin@example.com", name: "Admin User", admin: true },
+          { email: "dev@example.com", name: "Developer" },
+        ],
+        teams: [
+          {
+            key: "ENG",
+            name: "Engineering",
+            states: [
+              { name: "Backlog", type: "backlog" },
+              { name: "Todo", type: "unstarted" },
+              { name: "In Progress", type: "started" },
+              { name: "Done", type: "completed" },
+            ],
+          },
+        ],
+        labels: [
+          { name: "Bug", color: "#d92d20", team: "ENG" },
+          { name: "Feature", color: "#2563eb", team: "ENG" },
+        ],
+        issues: [
+          {
+            team: "ENG",
+            title: "Fix local checkout test",
+            description: "Reproduce and fix the checkout failure.",
+            state: "Todo",
+            assignee: "dev@example.com",
+            labels: ["Bug"],
+          },
+        ],
+        oauth_apps: [
+          {
+            client_id: "lin_example_client_id",
+            client_secret: "example_client_secret",
+            name: "My Linear App",
+            redirect_uris: ["http://localhost:3000/api/auth/callback/linear"],
+            scopes: ["read", "write", "issues:create", "comments:create"],
+            actor: "user",
+          },
+        ],
+        tokens: [
+          {
+            token: "lin_test_admin",
+            user: "admin@example.com",
+            scopes: ["read", "write", "issues:create", "comments:create", "admin"],
+          },
+        ],
+        strict_scopes: false,
+      },
+    },
+  },
 
   postgres: {
     label: "PostgreSQL database emulator (PGlite/WASM)",
@@ -467,6 +588,64 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
       postgres: {
         port: 5432,
         databases: [{ name: "app_dev" }],
+      },
+    },
+  },
+
+  twilio: {
+    label: "Twilio API emulator",
+    endpoints:
+      "accounts, API keys, phone numbers, Programmable Messaging, Messaging Services, Verify, Voice, webhooks, simulator, inspector",
+    async load() {
+      const mod = await import("@emulators/twilio");
+      return { plugin: mod.twilioPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback(cfg) {
+      const account = cfg?.account as { sid?: string } | undefined;
+      return {
+        login: account?.sid ?? "AC00000000000000000000000000000000",
+        id: 1,
+        scopes: [],
+      };
+    },
+    initConfig: {
+      twilio: {
+        account: {
+          sid: "AC00000000000000000000000000000000",
+          auth_token: "twilio_test_auth_token",
+          friendly_name: "Local Twilio Account",
+        },
+        api_keys: [
+          {
+            sid: "SK00000000000000000000000000000000",
+            secret: "twilio_test_api_secret",
+            friendly_name: "Local API Key",
+          },
+        ],
+        phone_numbers: [
+          {
+            phone_number: "+15551234567",
+            friendly_name: "Local SMS and Voice Number",
+            sms_url: "http://localhost:3000/api/twilio/sms",
+            voice_url: "http://localhost:3000/api/twilio/voice",
+          },
+        ],
+        messaging_services: [
+          {
+            friendly_name: "Local Messaging Service",
+            phone_numbers: ["+15551234567"],
+          },
+        ],
+        verify_services: [
+          {
+            friendly_name: "Local Verify Service",
+            code: "123456",
+            default_channel: "sms",
+          },
+        ],
+        conversations: {
+          services: [{ friendly_name: "Local Conversations" }],
+        },
       },
     },
   },

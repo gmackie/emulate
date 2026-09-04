@@ -1,6 +1,6 @@
 {
   "name": "@emulators/google",
-  "version": "0.5.3",
+  "version": "0.11.0",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -36,7 +36,6 @@
   },
   "dependencies": {
     "@emulators/core": "workspace:*",
-    "hono": "^4",
     "jose": "^6"
   },
   "devDependencies": {

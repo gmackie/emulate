@@ -1,7 +1,7 @@
 ---
 name: emulate
-description: Local drop-in API emulator for Vercel, GitHub, Google, Slack, Apple, Microsoft, and AWS. Use when the user needs to start emulated services, configure seed data, write tests against local APIs, set up CI without network access, or work with the emulate CLI or programmatic API. Triggers include "start the emulator", "emulate services", "mock API locally", "create emulator config", "test against local API", "npx emulate", or any task requiring local service emulation.
-allowed-tools: Bash(npx emulate:*), Bash(emulate:*)
+description: Local drop-in API emulator for Vercel, GitHub, Google, Slack, Apple, Microsoft, AWS, Linear, and other developer APIs. Use when the user needs to start emulated services, configure seed data, write tests against local APIs, set up CI without network access, or work with the emulate CLI or programmatic API. Triggers include "start the emulator", "emulate services", "mock API locally", "create emulator config", "test against local API", "npx emulate", or any task requiring local service emulation.
+allowed-tools: Bash(npx emulate:*)
 ---
 
 # Service Emulation with emulate
@@ -24,7 +24,14 @@ All services start with sensible defaults:
 | Slack     | 4003        |
 | Apple     | 4004        |
 | Microsoft | 4005        |
-| AWS       | 4006        |
+| Okta      | 4006        |
+| AWS       | 4007        |
+| Resend    | 4008        |
+| Stripe    | 4009        |
+| MongoDB Atlas | 4010   |
+| Clerk     | 4011        |
+| Linear    | 4012        |
+| Twilio    | 4013        |
 
 ## CLI
 
@@ -40,6 +47,9 @@ npx emulate --port 3000
 
 # Use a seed config file
 npx emulate --seed config.yaml
+
+# Generate omitted service secrets into a private file
+npx emulate start --seed config.yaml --generated-secrets-file .emulate-secrets.json
 
 # Generate a starter config
 npx emulate init
@@ -60,8 +70,11 @@ npx emulate list
 | `--seed` | auto-detect | Path to seed config (YAML or JSON) |
 | `--base-url` | none | Override advertised base URL (supports `{service}` template) |
 | `--portless` | off | Serve over HTTPS via portless (auto-registers aliases) |
+| `--generated-secrets-file` | none | Generate omitted service secrets and write them to a new owner-only JSON file |
 
 The port can also be set via `EMULATE_PORT` or `PORT` environment variables.
+
+The generated-secrets destination must not exist. emulate removes inherited ACLs, verifies effective owner-only access, and publishes complete JSON before opening listeners or configuring portless. Handled startup failures remove the invocation-owned artifact. A hard termination can leave a complete artifact that must be removed manually after confirming no invocation is using it. Only service-generated values appear in the artifact. Linux requires `setfacl` and `getfacl` from the `acl` package. The flag fails closed when access controls cannot be verified and is not supported on Windows.
 
 The advertised base URL (used in OAuth redirects, webhook URLs, etc.) can be overridden via `--base-url`, the `EMULATE_BASE_URL` env var (supports `{service}` template), or per-service `baseUrl` in the seed config. When running under portless, the `PORTLESS_URL` env var is also detected automatically.
 
@@ -86,11 +99,13 @@ await github.close()
 await vercel.close()
 ```
 
+For GitHub App tests, inspect secret-free minted installation-token metadata at `GET /_emulate/installation-tokens`.
+
 ### Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `service` | *(required)* | `'vercel'`, `'github'`, `'google'`, `'slack'`, `'apple'`, `'microsoft'`, or `'aws'` |
+| `service` | *(required)* | `'vercel'`, `'github'`, `'google'`, `'slack'`, `'apple'`, `'microsoft'`, `'okta'`, `'aws'`, `'resend'`, `'stripe'`, `'mongoatlas'`, `'clerk'`, `'linear'`, or `'twilio'` |
 | `port` | `4000` | Port for the HTTP server |
 | `seed` | none | Inline seed data (same shape as YAML config) |
 | `baseUrl` | none | Override advertised base URL. Per-service `baseUrl` in seed config takes highest priority, then this option, then `EMULATE_BASE_URL` env var (supports `{service}`), then `PORTLESS_URL` (supports `{service}`, automatically set by the `portless` CLI wrapper), then `http://localhost:<port>`. |
@@ -212,6 +227,36 @@ slack:
       redirect_uris:
         - http://localhost:3000/api/auth/callback/slack
 
+linear:
+  organization:
+    name: Acme
+    url_key: acme
+  users:
+    - email: admin@example.com
+      name: Admin User
+      admin: true
+    - email: dev@example.com
+      name: Developer
+  teams:
+    - key: ENG
+      name: Engineering
+  issues:
+    - team: ENG
+      title: Fix local checkout test
+      state: Todo
+      assignee: dev@example.com
+  oauth_apps:
+    - client_id: lin_example_client_id
+      client_secret: example_client_secret
+      name: My Linear App
+      redirect_uris:
+        - http://localhost:3000/api/auth/callback/linear
+      scopes: [read, write, issues:create, comments:create]
+  tokens:
+    - token: lin_test_admin
+      user: admin@example.com
+      scopes: [read, write, issues:create, comments:create, admin]
+
 apple:
   users:
     - email: testuser@icloud.com
@@ -307,14 +352,17 @@ GOOGLE_EMULATOR_URL=http://localhost:4002
 SLACK_EMULATOR_URL=http://localhost:4003
 APPLE_EMULATOR_URL=http://localhost:4004
 MICROSOFT_EMULATOR_URL=http://localhost:4005
-AWS_EMULATOR_URL=http://localhost:4006
+AWS_EMULATOR_URL=http://localhost:4007
+LINEAR_EMULATOR_URL=http://localhost:4012
 ```
 
 Then use these in your app to construct API and OAuth URLs. See each service's skill for SDK-specific override instructions.
 
-## Next.js Integration (Embedded Mode)
+## Framework Integration (Embedded Mode)
 
 The `@emulators/adapter-next` package embeds emulators directly into a Next.js app on the same origin. See the **next** skill (`skills/next/SKILL.md`) for full setup, Auth.js configuration, persistence, and font tracing details.
+
+The `@emulators/adapter-nuxt` package embeds emulators directly into a Nuxt app on the same origin. See the **nuxt** skill (`skills/nuxt/SKILL.md`) for the server route, Nuxt config, OAuth configuration, and persistence setup.
 
 ## Persistence
 
@@ -340,7 +388,7 @@ const kvAdapter: PersistenceAdapter = {
 }
 ```
 
-State is loaded on cold start and saved after every mutating request (POST, PUT, PATCH, DELETE). Saves are serialized to prevent race conditions.
+State is loaded on cold start and saved after every mutating request (POST, PUT, PATCH, DELETE). Saves are serialized to prevent race conditions. Generated GitHub App identities require `initialize` to atomically create the initial value or return the value another instance created first.
 
 ## Architecture
 
@@ -348,15 +396,18 @@ State is loaded on cold start and saved after every mutating request (POST, PUT,
 packages/
   emulate/           # CLI entry point + programmatic API
   @emulators/
-    core/            # HTTP server (Hono), Store, plugin interface, middleware
+    core/            # HTTP server, Store, plugin interface, middleware
     adapter-next/    # Next.js App Router integration
+    adapter-nuxt/    # Nuxt server route integration
     vercel/          # Vercel API service plugin
     github/          # GitHub API service plugin
     google/          # Google OAuth 2.0 / OIDC plugin
     slack/           # Slack Web API, OAuth, incoming webhooks plugin
+    linear/          # Linear GraphQL API, OAuth, webhooks plugin
+    twilio/          # Twilio Messaging, Verify, Voice, webhooks plugin
     apple/           # Sign in with Apple / OIDC plugin
     microsoft/       # Microsoft Entra ID OAuth 2.0 / OIDC plugin
     aws/             # AWS S3, SQS, IAM, STS plugin
 ```
 
-The core provides a generic `Store` with typed `Collection<T>` instances supporting CRUD, indexing, filtering, and pagination. Each service plugin registers routes on the shared Hono app and uses the store for state.
+The core provides a generic `Store` with typed `Collection<T>` instances supporting CRUD, indexing, filtering, and pagination. Each service plugin registers routes with the shared internal app and uses the store for state.

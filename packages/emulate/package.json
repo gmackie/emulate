@@ -1,6 +1,6 @@
 {
   "name": "@gmacko/emulate",
-  "version": "0.5.3",
+  "version": "0.11.0",
   "description": "Local drop-in replacement services for CI and no-network sandboxes",
   "license": "Apache-2.0",
   "type": "module",
@@ -52,7 +52,6 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@hono/node-server": "^1",
     "commander": "^14",
     "picocolors": "^1.1.1",
     "redis-memory-server": "^0.10.0",
@@ -72,6 +71,8 @@
     "@emulators/resend": "workspace:*",
     "@emulators/stripe": "workspace:*",
     "@emulators/clerk": "workspace:*",
+    "@emulators/linear": "workspace:*",
+    "@emulators/twilio": "workspace:*",
     "@emulators/postgres": "workspace:*",
     "@emulators/redis": "workspace:*",
     "tsup": "^8",

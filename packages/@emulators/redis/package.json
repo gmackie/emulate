@@ -1,6 +1,6 @@
 {
   "name": "@emulators/redis",
-  "version": "0.5.3",
+  "version": "0.11.0",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -33,8 +33,7 @@
   },
   "dependencies": {
     "redis-memory-server": "^0.10.0",
-    "@emulators/core": "workspace:*",
-    "hono": "^4"
+    "@emulators/core": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8",
